@@ -9,8 +9,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, timezone
-from config import INACTIVE_SATELLITES
-from dop_calculations import calculate_dop_for_location, calculate_bounding_boxes, get_dop_quality
+from config.config import INACTIVE_SATELLITES
+from analysis.dop_calculations import calculate_dop_for_location, calculate_bounding_boxes, get_dop_quality
 import folium
 from streamlit_folium import st_folium
 
