@@ -45,7 +45,18 @@ def fetch_multiple_tles(norad_ids, username: str, password: str):
     resp = session.get(query_url, timeout=60)
     if resp.status_code != 200:
         raise Exception(f"Failed to fetch TLE data: HTTP {resp.status_code}")
-    return resp.text
+    
+    # Process the text to remove "0 " prefix from name lines (Space-Track 3LE format)
+    # This ensures compatibility with parsers expecting standard TLE format
+    raw_text = resp.text
+    cleaned_lines = []
+    for line in raw_text.split('\n'):
+        if line.startswith('0 '):
+            cleaned_lines.append(line[2:].strip())
+        else:
+            cleaned_lines.append(line)
+            
+    return '\n'.join(cleaned_lines)
 
 
 def fetch_and_classify_satellite(norad_id: int, start_date: str, end_date: str,
