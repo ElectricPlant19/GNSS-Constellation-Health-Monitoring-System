@@ -863,45 +863,52 @@ if st.session_state.get('analysis_complete', False):
         
         st.markdown("---")
         
-        # Main health table
+        # Main health table - with error handling for missing columns
         st.markdown("### 📋 Detailed Health Assessment")
-        st.dataframe(
-            health_df[[
-                'Satellite', 'Type', 'Health Status', 'Overall Score', 
-                'Target Incl. (°)', 'Mean Incl. (°)', 'Incl. Dev. (°)',
-                'Altitude (km)', 'Current Drift (°/day)', 
-                'Designated Lon (°)', 'Lon Slot Deviation (°)'
-            ]],
-            hide_index=True,
-            use_container_width=True,
-            column_config={
-                "Health Status": st.column_config.TextColumn(
-                    "Health Status",
-                    help="🟢 Healthy (≥80) | 🟡 Fair (60-79) | 🟠 Degraded (40-59) | 🔴 Critical (<40)",
-                    width="medium"
-                ),
-                "Overall Score": st.column_config.NumberColumn(
-                    "Overall Score",
-                    help="Weighted score: Inclination (30%) + Maintenance (25%) + Drift (20%) + Longitude (15%) + Uniformity (10%)",
-                    format="%.1f"
-                ),
-                "Altitude (km)": st.column_config.NumberColumn(
-                    "Altitude (km)",
-                    help="Current orbital altitude. GEO nominal: 35,786 km. Graveyard: >35,986 km",
-                    format="%.1f"
-                ),
-                "Designated Lon (°)": st.column_config.NumberColumn(
-                    "Designated Lon (°)",
-                    help="Designated longitude slot from constellation requirements",
-                    format="%.2f"
-                ),
-                "Lon Slot Deviation (°)": st.column_config.NumberColumn(
-                    "Lon Slot Deviation (°)",
-                    help="Deviation from designated slot. GSO: <0.5° ideal | IGSO: <5° ideal",
-                    format="%.2f"
-                )
-            }
-        )
+        
+        # Ensure required columns exist with default values
+        required_cols = [
+            'Satellite', 'Type', 'Health Status', 'Overall Score', 
+            'Target Incl. (°)', 'Mean Incl. (°)', 'Incl. Dev. (°)',
+            'Altitude (km)', 'Current Drift (°/day)', 
+            'Designated Lon (°)', 'Lon Slot Deviation (°)'
+        ]
+        
+        for col in required_cols:
+            if col not in health_df.columns:
+                health_df[col] = "N/A"
+        
+        # Convert numeric columns that might have N/A to strings for safe display
+        display_df = health_df[required_cols].copy()
+        for col in ['Designated Lon (°)', 'Lon Slot Deviation (°)']:
+            display_df[col] = display_df[col].astype(str)
+        
+        try:
+            st.dataframe(
+                display_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Health Status": st.column_config.TextColumn(
+                        "Health Status",
+                        help="🟢 Healthy (≥80) | 🟡 Fair (60-79) | 🟠 Degraded (40-59) | 🔴 Critical (<40)",
+                        width="medium"
+                    ),
+                    "Overall Score": st.column_config.NumberColumn(
+                        "Overall Score",
+                        help="Weighted score: Inclination (30%) + Maintenance (25%) + Drift (20%) + Longitude (15%) + Uniformity (10%)",
+                        format="%.1f"
+                    ),
+                    "Altitude (km)": st.column_config.NumberColumn(
+                        "Altitude (km)",
+                        help="Current orbital altitude. GEO nominal: 35,786 km. Graveyard: >35,986 km",
+                        format="%.1f"
+                    )
+                }
+            )
+        except Exception as e:
+            # Fallback to simple table if column config causes issues
+            st.dataframe(display_df, hide_index=True, use_container_width=True)
         
         # Health scoring explanation
         with st.expander("ℹ️ Health Scoring Methodology", expanded=False):
