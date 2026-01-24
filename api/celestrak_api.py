@@ -124,8 +124,11 @@ def fetch_tles_with_fallback(norad_ids, username=None, password=None, timeout=10
             tle_data = fetch_multiple_tles(norad_ids, username, password)
             if tle_data:
                 return tle_data, "spacetrack"
+            else:
+                st.warning("⚠️ Space-Track fallback returned no data.")
         except Exception as e:
-            # Space-Track also failed
+            # Space-Track also failed - log the error for debugging
+            st.warning(f"⚠️ Space-Track fallback failed: {str(e)}")
             pass
     
     return "", "none"
