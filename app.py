@@ -770,96 +770,103 @@ if st.session_state.get('analysis_complete', False):
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
             
             # Use existing satellites_dop if available, otherwise fetch
-            if 'satellites_dop' in st.session_state:
+            if 'satellites_dop' in st.session_state and st.session_state['satellites_dop']:
                 satellites_dop = st.session_state['satellites_dop']
             else:
                 tle_data = fetch_tles_from_celestrak(norad_ids)
                 if tle_data:
                     satellites_dop = parse_tle_data(tle_data, SAT_DICT)
+                    # Store for reuse
+                    st.session_state['satellites_dop'] = satellites_dop
                 else:
                     satellites_dop = {}
             
-            lon_progress.progress(0.2, text="Processing satellite positions...")
-            
-            if satellites_dop:
+            # If no TLE data available, skip longitude calculation with warning
+            if not satellites_dop:
+                lon_progress.progress(1.0, text="⚠️ Could not fetch TLE data - longitude deviation unavailable")
+                st.warning("⚠️ CelesTrak TLE fetch timed out. Longitude deviation data unavailable. Try the DOP Analysis tab first.")
+            else:
+                lon_progress.progress(0.2, text="Processing satellite positions...")
+                
                 # Use the global ts timescale instead of calling load.timescale() again
                 # This avoids slow network downloads on Streamlit Cloud
                 current_time = datetime.now(timezone.utc)
             
-            # Calculate mean longitude for each satellite over last 24 hours
-            total_sats_for_lon = len(health_df)
-            for idx, row in health_df.iterrows():
-                sat_name = row['Satellite']
-                designated_lon = row['Designated Lon (°)']
+                # Calculate mean longitude for each satellite over last 24 hours
+                total_sats_for_lon = len(health_df)
+
+                for idx, row in health_df.iterrows():
+                    sat_name = row['Satellite']
+                    designated_lon = row['Designated Lon (°)']
+                    
+                    # Update progress bar
+                    progress_pct = 0.2 + (0.8 * (idx + 1) / total_sats_for_lon)
+                    lon_progress.progress(progress_pct, text=f"Processing {sat_name} ({idx + 1}/{total_sats_for_lon})...")
+                    
+                    if sat_name in satellites_dop and designated_lon != "N/A":
+                        try:
+                            sat_obj = satellites_dop[sat_name]
+                            
+                            # Generate time steps over 24 hours
+                            num_steps = 96  # 15-minute intervals
+                            longitudes = []
+                            
+                            for i in range(num_steps):
+                                dt = current_time - timedelta(hours=24) + timedelta(minutes=i * 15)
+                                t = ts.from_datetime(dt)
+                                geocentric = sat_obj.at(t)
+                                subpoint = wgs84.subpoint(geocentric)
+                                longitudes.append(subpoint.longitude.degrees)
+                            
+                            # Compute circular mean longitude
+                            lons_rad = np.deg2rad(longitudes)
+                            x = np.cos(lons_rad)
+                            y = np.sin(lons_rad)
+                            mean_x = np.mean(x)
+                            mean_y = np.mean(y)
+                            mean_lon_rad = np.arctan2(mean_y, mean_x)
+                            current_mean_lon = np.rad2deg(mean_lon_rad)
+                            
+                            # Calculate deviation from designated longitude
+                            diff = current_mean_lon - float(designated_lon)
+                            while diff > 180:
+                                diff -= 360
+                            while diff < -180:
+                                diff += 360
+                            longitude_deviation = diff
+                            
+                            # Update health_df with calculated values
+                            health_df.at[idx, 'Current Mean Lon (°)'] = round(current_mean_lon, 2)
+                            health_df.at[idx, 'Lon Slot Deviation (°)'] = round(longitude_deviation, 2)
+                            
+                            # Calculate longitude score
+                            abs_dev = abs(longitude_deviation)
+                            sat_type = row['Type']
+                            
+                            if sat_type == 'GSO':
+                                if abs_dev <= 0.5:
+                                    lon_score = 100
+                                elif abs_dev <= 1.0:
+                                    lon_score = 90 - ((abs_dev - 0.5) / 0.5) * 20
+                                elif abs_dev <= 2.0:
+                                    lon_score = 70 - ((abs_dev - 1.0) / 1.0) * 30
+                                else:
+                                    lon_score = max(0, 40 - ((abs_dev - 2.0) / 2.0) * 40)
+                            else:  # IGSO
+                                if abs_dev <= 5.0:
+                                    lon_score = 100
+                                elif abs_dev <= 10.0:
+                                    lon_score = 90 - ((abs_dev - 5.0) / 5.0) * 30
+                                else:
+                                    lon_score = max(0, 60 - ((abs_dev - 10.0) / 10.0) * 60)
+                            
+                            health_df.at[idx, 'Lon Deviation Score'] = round(lon_score, 1)
+                            
+                        except Exception as e:
+                            # If calculation fails for this satellite, leave as N/A
+                            pass
                 
-                # Update progress bar
-                progress_pct = 0.2 + (0.8 * (idx + 1) / total_sats_for_lon)
-                lon_progress.progress(progress_pct, text=f"Processing {sat_name} ({idx + 1}/{total_sats_for_lon})...")
-                
-                if sat_name in satellites_dop and designated_lon != "N/A":
-                    try:
-                        sat_obj = satellites_dop[sat_name]
-                        
-                        # Generate time steps over 24 hours
-                        num_steps = 96  # 15-minute intervals
-                        longitudes = []
-                        
-                        for i in range(num_steps):
-                            dt = current_time - timedelta(hours=24) + timedelta(minutes=i * 15)
-                            t = ts.from_datetime(dt)
-                            geocentric = sat_obj.at(t)
-                            subpoint = wgs84.subpoint(geocentric)
-                            longitudes.append(subpoint.longitude.degrees)
-                        
-                        # Compute circular mean longitude
-                        lons_rad = np.deg2rad(longitudes)
-                        x = np.cos(lons_rad)
-                        y = np.sin(lons_rad)
-                        mean_x = np.mean(x)
-                        mean_y = np.mean(y)
-                        mean_lon_rad = np.arctan2(mean_y, mean_x)
-                        current_mean_lon = np.rad2deg(mean_lon_rad)
-                        
-                        # Calculate deviation from designated longitude
-                        diff = current_mean_lon - float(designated_lon)
-                        while diff > 180:
-                            diff -= 360
-                        while diff < -180:
-                            diff += 360
-                        longitude_deviation = diff
-                        
-                        # Update health_df with calculated values
-                        health_df.at[idx, 'Current Mean Lon (°)'] = round(current_mean_lon, 2)
-                        health_df.at[idx, 'Lon Slot Deviation (°)'] = round(longitude_deviation, 2)
-                        
-                        # Calculate longitude score
-                        abs_dev = abs(longitude_deviation)
-                        sat_type = row['Type']
-                        
-                        if sat_type == 'GSO':
-                            if abs_dev <= 0.5:
-                                lon_score = 100
-                            elif abs_dev <= 1.0:
-                                lon_score = 90 - ((abs_dev - 0.5) / 0.5) * 20
-                            elif abs_dev <= 2.0:
-                                lon_score = 70 - ((abs_dev - 1.0) / 1.0) * 30
-                            else:
-                                lon_score = max(0, 40 - ((abs_dev - 2.0) / 2.0) * 40)
-                        else:  # IGSO
-                            if abs_dev <= 5.0:
-                                lon_score = 100
-                            elif abs_dev <= 10.0:
-                                lon_score = 90 - ((abs_dev - 5.0) / 5.0) * 30
-                            else:
-                                lon_score = max(0, 60 - ((abs_dev - 10.0) / 10.0) * 60)
-                        
-                        health_df.at[idx, 'Lon Deviation Score'] = round(lon_score, 1)
-                        
-                    except Exception as e:
-                        # If calculation fails for this satellite, leave as N/A
-                        pass
-            
-            lon_progress.progress(1.0, text="✅ Longitude deviation calculation complete!")
+                lon_progress.progress(1.0, text="✅ Longitude deviation calculation complete!")
         except Exception as e:
             # If overall calculation fails, proceed without longitude data
             st.warning(f"Could not calculate longitude deviations: {str(e)[:50]}")
