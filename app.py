@@ -16,7 +16,7 @@ from config.config import (
     GRAVEYARD_ORBIT_MIN, GEO_NOMINAL_ALTITUDE, GEO_ALTITUDE_TOLERANCE
 )
 from api.spacetrack_api import fetch_and_classify_satellite, fetch_multiple_tles
-from api.celestrak_api import fetch_tles_from_celestrak
+from api.celestrak_api import fetch_tles_from_celestrak, fetch_tles_with_fallback
 from analysis.drift_analysis import assess_drift_health, get_drift_direction
 from analysis.maneuver_detection import detect_navik_maneuvers
 from analysis.health_assessment import assess_satellite_health_with_drift
@@ -761,7 +761,7 @@ if st.session_state.get('analysis_complete', False):
             from skyfield.api import wgs84
             import numpy as np
             from datetime import timedelta
-            from api.celestrak_api import fetch_tles_from_celestrak
+            from api.celestrak_api import fetch_tles_with_fallback
             from analysis.dop_calculations import parse_tle_data
             
             lon_progress.progress(0.1, text="Fetching TLE data for longitude calculation...")
@@ -769,15 +769,18 @@ if st.session_state.get('analysis_complete', False):
             # Fetch TLE data for longitude calculation
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
             
-            # Use existing satellites_dop if available, otherwise fetch
+            # Use existing satellites_dop if available, otherwise fetch with fallback
             if 'satellites_dop' in st.session_state and st.session_state['satellites_dop']:
                 satellites_dop = st.session_state['satellites_dop']
             else:
-                tle_data = fetch_tles_from_celestrak(norad_ids)
+                # Try CelesTrak first, fall back to Space-Track
+                tle_data, tle_source = fetch_tles_with_fallback(norad_ids, username, password, timeout=10)
                 if tle_data:
                     satellites_dop = parse_tle_data(tle_data, SAT_DICT)
                     # Store for reuse
                     st.session_state['satellites_dop'] = satellites_dop
+                    if tle_source == "spacetrack":
+                        st.info("📡 Using Space-Track API (CelesTrak unavailable)")
                 else:
                     satellites_dop = {}
             
@@ -1209,12 +1212,14 @@ if st.session_state.get('analysis_complete', False):
         st.markdown("## Dilution of Precision (DOP) Analysis")
         try:
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
-            # Use CelesTrak API for DOP TLE data (no authentication required)
-            tle_data = fetch_tles_from_celestrak(norad_ids)
+            # Try CelesTrak first, fall back to Space-Track if blocked
+            tle_data, tle_source = fetch_tles_with_fallback(norad_ids, username, password, timeout=10)
             
             if not tle_data:
-                st.error("❌ Failed to fetch TLE data for DOP calculations")
+                st.error("❌ Failed to fetch TLE data for DOP calculations. Both CelesTrak and Space-Track are unavailable.")
             else:
+                if tle_source == "spacetrack":
+                    st.info("📡 Using Space-Track API (CelesTrak unavailable)")
                 satellites = parse_tle_data(tle_data, SAT_DICT)
                 
                 if len(satellites) == 0:
