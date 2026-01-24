@@ -1,1 +1,4 @@
-
+[theme]
+primaryColor = "#1e3a8a"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
