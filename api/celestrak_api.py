@@ -7,13 +7,14 @@ import streamlit as st
 import time
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_tles_from_celestrak(norad_ids):
+def fetch_tles_from_celestrak(norad_ids, timeout=10):
     """
     Fetch TLE data from CelesTrak for a list of NORAD IDs.
     Uses retry logic and alternative endpoints for cloud reliability.
     
     Args:
         norad_ids (list): List of NORAD IDs (integers or strings)
+        timeout (int): Request timeout in seconds (default 10 for cloud)
         
     Returns:
         str: Raw TLE text data (3 lines per satellite)
@@ -29,11 +30,20 @@ def fetch_tles_from_celestrak(norad_ids):
         'Accept': 'text/plain',
     }
     
+    # Quick connectivity check - if this fails, skip TLE fetch entirely
+    try:
+        test_url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_ids[0]}&FORMAT=TLE"
+        test_response = requests.get(test_url, timeout=5, headers=headers)
+        if test_response.status_code != 200:
+            return ""  # CelesTrak not responding, fail fast
+    except Exception:
+        return ""  # Network issue, fail fast
+    
     # Try batch fetch first (faster and more reliable)
     try:
-        # CelesTrak GP endpoint - try to fetch all at once using GROUP
+        # CelesTrak GP endpoint - try GNSS group first
         batch_url = "https://celestrak.org/NORAD/elements/gp.php?GROUP=gnss&FORMAT=TLE"
-        response = requests.get(batch_url, timeout=30, headers=headers)
+        response = requests.get(batch_url, timeout=timeout, headers=headers)
         if response.status_code == 200:
             batch_text = response.text.strip()
             if batch_text and '1 ' in batch_text:
@@ -54,14 +64,14 @@ def fetch_tles_from_celestrak(norad_ids):
     except Exception:
         pass  # Fall back to individual requests
     
-    # If batch didn't work, try individual requests
+    # If batch didn't work, try individual requests (with reduced retries for speed)
     if not all_tles:
         for norad_id in norad_ids:
-            # Try multiple retries
-            for attempt in range(3):
+            # Reduced to 2 attempts for faster failure
+            for attempt in range(2):
                 try:
                     url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
-                    response = requests.get(url, timeout=20, headers=headers)
+                    response = requests.get(url, timeout=timeout, headers=headers)
                     
                     if response.status_code == 200:
                         tle_text = response.text.strip()
@@ -69,11 +79,11 @@ def fetch_tles_from_celestrak(norad_ids):
                             all_tles.append(tle_text)
                             break
                     
-                    time.sleep(0.5)  # Small delay between retries
+                    time.sleep(0.3)  # Shorter delay between retries
                     
                 except requests.exceptions.Timeout:
-                    if attempt < 2:
-                        time.sleep(1)
+                    if attempt < 1:
+                        time.sleep(0.5)
                         continue
                 except Exception:
                     break
@@ -82,3 +92,4 @@ def fetch_tles_from_celestrak(norad_ids):
         return ""
     
     return '\n'.join(all_tles)
+
