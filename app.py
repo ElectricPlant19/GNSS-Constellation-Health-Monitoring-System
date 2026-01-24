@@ -25,7 +25,7 @@ from visualizations.visualization import (
     plot_individual_satellites, plot_combined_drift, plot_bounding_boxes,
     plot_sky_plot, plot_animated_sky_plot, plot_dop_over_time, plot_combined_inclination,
     plot_combined_altitude, plot_drift_distribution, plot_drift_vs_altitude,
-    plot_constellation_coverage, plot_mean_longitude_map
+    plot_constellation_coverage, plot_mean_longitude_map, plot_historical_central_longitude
 )
 
 # Initialize timescale globally
@@ -395,10 +395,16 @@ st.sidebar.markdown("---")
 # Date Range - Always visible
 st.sidebar.markdown("#### 📅 Analysis Period")
 col1, col2 = st.sidebar.columns(2)
+
+# Calculate default date range: last 90 days
+from datetime import date as date_class, timedelta as timedelta_class
+default_end = date_class.today()
+default_start = default_end - timedelta_class(days=90)
+
 with col1:
-    start_date = st.date_input("Start date", value=date(2025, 1, 1))
+    start_date = st.date_input("Start date", value=default_start)
 with col2:
-    end_date = st.date_input("End date", value=date(2025, 10, 1))
+    end_date = st.date_input("End date", value=default_end)
 
 start_date_str = start_date.strftime("%Y-%m-%d")
 end_date_str = end_date.strftime("%Y-%m-%d")
@@ -473,41 +479,61 @@ if run_analysis:
     if not username or not password:
         st.error("❌ Please enter Space-Track credentials in the sidebar")
     else:
-        with st.spinner(f"🔄 Fetching {system_label} satellite data..."):
-            all_dfs = []
-            errors = {}
-            
-            for sat_name, norad in SAT_DICT.items():
-                try:
-                    if norad is None:
-                        raise ValueError(f"NORAD ID not set for {sat_name}. Please update configuration.")
-                    df = fetch_and_classify_satellite(
-                        norad_id=int(norad),
-                        start_date=start_date_str,
-                        end_date=end_date_str,
-                        username=username,
-                        password=password,
-                        igso_min=10,
-                        deviation_tol=0.3
-                    )
+        # Validate date range
+        if start_date > end_date:
+            st.error("❌ Start date must be before end date")
+        elif end_date > date_class.today():
+            st.error(f"❌ End date cannot be in the future. Today is {date_class.today().strftime('%Y-%m-%d')}")
+        else:
+            with st.spinner(f"🔄 Fetching {system_label} satellite data..."):
+                all_dfs = []
+                errors = {}
+                
+                total_sats = len(SAT_DICT)
+                progress_placeholder = st.empty()
+                
+                for idx, (sat_name, norad) in enumerate(SAT_DICT.items(), 1):
+                    try:
+                        progress_placeholder.info(f"📡 Fetching {sat_name} ({idx}/{total_sats})... NORAD ID: {norad}")
+                        
+                        if norad is None:
+                            raise ValueError(f"NORAD ID not set for {sat_name}. Please update configuration.")
+                        df = fetch_and_classify_satellite(
+                            norad_id=int(norad),
+                            start_date=start_date_str,
+                            end_date=end_date_str,
+                            username=username,
+                            password=password,
+                            igso_min=10,
+                            deviation_tol=0.3
+                        )
 
-                    df['EPOCH'] = pd.to_datetime(df['EPOCH'])
-                    df = df.sort_values('EPOCH').reset_index(drop=True)
-
-                    if daily_only:
-                        df['date'] = df['EPOCH'].dt.date
-                        df = df.sort_values('EPOCH').groupby('date', as_index=False).first()
                         df['EPOCH'] = pd.to_datetime(df['EPOCH'])
+                        df = df.sort_values('EPOCH').reset_index(drop=True)
 
-                    df['satellite'] = sat_name
+                        if daily_only:
+                            df['date'] = df['EPOCH'].dt.date
+                            df = df.sort_values('EPOCH').groupby('date', as_index=False).first()
+                            df['EPOCH'] = pd.to_datetime(df['EPOCH'])
 
-                    if 'mean_inclination' not in df.columns:
-                        df['mean_inclination'] = df['INCLINATION'].mean()
+                        df['satellite'] = sat_name
 
-                    all_dfs.append(df)
+                        if 'mean_inclination' not in df.columns:
+                            df['mean_inclination'] = df['INCLINATION'].mean()
 
-                except Exception as e:
-                    errors[sat_name] = str(e)
+                        all_dfs.append(df)
+                        progress_placeholder.success(f"✅ {sat_name} fetched successfully ({len(df)} records)")
+
+                    except Exception as e:
+                        error_msg = str(e)
+                        if "timeout" in error_msg.lower():
+                            error_msg = f"Request timeout - Space-Track API is slow or unresponsive. Try a smaller date range."
+                        elif "No GP data found" in error_msg:
+                            error_msg = f"No data available for the selected date range ({start_date_str} to {end_date_str})"
+                        errors[sat_name] = error_msg
+                        progress_placeholder.warning(f"⚠️ {sat_name} failed: {error_msg}")
+                
+                progress_placeholder.empty()
 
             if errors:
                 st.warning("⚠️ Some satellites failed to fetch:")
@@ -1094,13 +1120,13 @@ if st.session_state.get('analysis_complete', False):
                     for _, row in health_df.iterrows():
                         pattern_summary.append({
                             'Satellite': row['Satellite'],
-                            'E-W Expected Interval (days)': row.get('EW Expected Interval (days)', 'N/A'),
-                            'E-W Days Since Last': row.get('EW Days Since Last', 'N/A'),
-                            'E-W Confidence': row.get('EW Pattern Confidence', 'N/A'),
-                            'N-S Expected Interval (days)': row.get('NS Expected Interval (days)', 'N/A'),
-                            'N-S Days Since Last': row.get('NS Days Since Last', 'N/A'),
-                            'N-S Confidence': row.get('NS Pattern Confidence', 'N/A'),
-                            'Analysis Period': row.get('Pattern Analysis Period', 'N/A')
+                            'E-W Expected Interval (days)': str(row.get('EW Expected Interval (days)', 'N/A')),
+                            'E-W Days Since Last': str(row.get('EW Days Since Last', 'N/A')),
+                            'E-W Confidence': str(row.get('EW Pattern Confidence', 'N/A')),
+                            'N-S Expected Interval (days)': str(row.get('NS Expected Interval (days)', 'N/A')),
+                            'N-S Days Since Last': str(row.get('NS Days Since Last', 'N/A')),
+                            'N-S Confidence': str(row.get('NS Pattern Confidence', 'N/A')),
+                            'Analysis Period': str(row.get('Pattern Analysis Period', 'N/A'))
                         })
                     
                     pattern_summary_df = pd.DataFrame(pattern_summary)
@@ -1309,6 +1335,10 @@ if st.session_state.get('analysis_complete', False):
                     plot_mean_longitude_map(satellites, current_time, system_label=system_label)
                 else:
                     st.info("💡 Run DOP analysis to view mean longitude map")
+                
+                # Historical central longitude tracking
+                st.markdown("---")
+                plot_historical_central_longitude(df_all, system_label=system_label)
             
             with viz_tab2:
                 st.markdown("### Sky Plots & Satellite Visibility")
@@ -1443,3 +1473,4 @@ else:
         </ol>
     </div>
     """, unsafe_allow_html=True)
+
