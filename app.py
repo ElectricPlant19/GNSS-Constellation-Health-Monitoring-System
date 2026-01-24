@@ -348,10 +348,16 @@ st.markdown("""
 st.sidebar.markdown("### ⚙️ Configuration")
 st.sidebar.markdown("---")
 
-# Credentials - Always visible
-st.sidebar.markdown("#### 🔐 Space-Track Credentials")
-username = st.sidebar.text_input("Username", value="", type="default", help="Your Space-Track.org username")
-password = st.sidebar.text_input("Password", value="", type="password", help="Your Space-Track.org password")
+# Load built-in credentials from secrets
+try:
+    username = st.secrets["spacetrack"]["username"]
+    password = st.secrets["spacetrack"]["password"]
+    st.sidebar.success("✅ Using built-in Space-Track credentials")
+except Exception:
+    # Fallback to manual input if secrets not available
+    st.sidebar.markdown("#### 🔐 Space-Track Credentials")
+    username = st.sidebar.text_input("Username", value="", type="default", help="Your Space-Track.org username")
+    password = st.sidebar.text_input("Password", value="", type="password", help="Your Space-Track.org password")
 
 st.sidebar.markdown("---")
 
@@ -477,7 +483,7 @@ with col2:
 
 if run_analysis:
     if not username or not password:
-        st.error("❌ Please enter Space-Track credentials in the sidebar")
+        st.error("❌ Space-Track credentials not configured. Please add credentials to `.streamlit/secrets.toml`")
     else:
         # Validate date range
         if start_date > end_date:
