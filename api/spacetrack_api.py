@@ -4,6 +4,7 @@ Handles authentication and data retrieval from space-track.org
 """
 
 import requests
+from requests.exceptions import Timeout, ConnectionError, RequestException
 import streamlit as st
 from config.config import LOGIN_URL
 
@@ -12,7 +13,7 @@ from config.config import LOGIN_URL
 def get_spacetrack_session(username: str, password: str):
     """Returns a logged-in requests.Session cached as a resource."""
     s = requests.Session()
-    resp = s.post(LOGIN_URL, data={'identity': username, 'password': password})
+    resp = s.post(LOGIN_URL, data={'identity': username, 'password': password}, timeout=30)
     if resp.status_code != 200:
         raise Exception(f"Space-Track login failed: HTTP {resp.status_code}")
     return s
@@ -26,7 +27,7 @@ def fetch_tle_json_cached(norad_id: int, start_date: str, end_date: str, usernam
         f"https://www.space-track.org/basicspacedata/query/class/gp_history/"
         f"EPOCH/{start_date}--{end_date}/NORAD_CAT_ID/{norad_id}/orderby/EPOCH asc/format/json"
     )
-    resp = session.get(gp_url)
+    resp = session.get(gp_url, timeout=60)
     if resp.status_code != 200:
         raise Exception(f"Failed to fetch GP data for {norad_id}: HTTP {resp.status_code}")
     return resp.json()
@@ -41,7 +42,7 @@ def fetch_multiple_tles(norad_ids, username: str, password: str):
         f"https://www.space-track.org/basicspacedata/query/class/tle_latest/"
         f"NORAD_CAT_ID/{ids_str}/orderby/NORAD_CAT_ID,ORDINAL/format/3le"
     )
-    resp = session.get(query_url)
+    resp = session.get(query_url, timeout=60)
     if resp.status_code != 200:
         raise Exception(f"Failed to fetch TLE data: HTTP {resp.status_code}")
     return resp.text
@@ -54,7 +55,14 @@ def fetch_and_classify_satellite(norad_id: int, start_date: str, end_date: str,
     import numpy as np
     from config.config import R_EARTH
     
-    data = fetch_tle_json_cached(int(norad_id), start_date, end_date, username, password)
+    try:
+        data = fetch_tle_json_cached(int(norad_id), start_date, end_date, username, password)
+    except Timeout:
+        raise Exception(f"TIMEOUT: Space-Track API did not respond within 60 seconds for NORAD ID {norad_id}. The API may be overloaded. Please try again later or use a smaller date range.")
+    except ConnectionError:
+        raise Exception(f"CONNECTION ERROR: Unable to reach Space-Track API. Please check your internet connection.")
+    except RequestException as e:
+        raise Exception(f"REQUEST ERROR: {str(e)}")
 
     if not data:
         raise ValueError(f"No GP data found for NORAD ID {norad_id} in given range")
@@ -79,6 +87,22 @@ def fetch_and_classify_satellite(norad_id: int, start_date: str, end_date: str,
         required_cols.append('SEMIMAJOR_AXIS')
     if 'MEAN_MOTION' in df.columns:
         required_cols.append('MEAN_MOTION')
+    # Preserve TLE lines for historical reconstruction
+    if 'TLE_LINE1' in df.columns:
+        required_cols.append('TLE_LINE1')
+    if 'TLE_LINE2' in df.columns:
+        required_cols.append('TLE_LINE2')
+    if 'OBJECT_NAME' in df.columns:
+        required_cols.append('OBJECT_NAME')
+    # Preserve additional orbital elements for central longitude calculation
+    if 'RA_OF_ASC_NODE' in df.columns:
+        required_cols.append('RA_OF_ASC_NODE')
+    if 'ARG_OF_PERICENTER' in df.columns:
+        required_cols.append('ARG_OF_PERICENTER')
+    if 'MEAN_ANOMALY' in df.columns:
+        required_cols.append('MEAN_ANOMALY')
+    if 'ECCENTRICITY' in df.columns:
+        required_cols.append('ECCENTRICITY')
     
     df = df[required_cols].copy()
     df['EPOCH'] = pd.to_datetime(df['EPOCH'])
