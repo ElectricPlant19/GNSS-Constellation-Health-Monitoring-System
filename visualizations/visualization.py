@@ -1338,6 +1338,259 @@ def plot_constellation_coverage(satellites, current_time, location_points, syste
             st.dataframe(pos_df, hide_index=True, use_container_width=True)
 
 
+def plot_historical_central_longitude(df_all, system_label="NavIC"):
+    """
+    Plot historical central longitude for each satellite using historical TLE data.
+    
+    For each satellite:
+    - Group TLEs by week (to reduce computation)
+    - For each week, use the TLE from that period
+    - Propagate +/- 12 hours around the TLE epoch
+    - Calculate circular mean longitude
+    - Plot the trend over time
+    
+    Args:
+        df_all: DataFrame containing historical satellite data with TLE information
+        system_label: Name of the constellation (NavIC, QZSS, BeiDou-3)
+    """
+    import numpy as np
+    from skyfield.api import load, EarthSatellite, wgs84
+    from config.config import NAVIK_SERVICE_REQUIREMENTS, QZSS_SERVICE_REQUIREMENTS, BEIDOU3_SERVICE_REQUIREMENTS
+    
+    st.markdown("### 📍 Historical Central Longitude (Last 90 Days)")
+    st.caption("Shows how each satellite's central longitude has changed over time based on historical TLE data")
+    
+    # Select appropriate service requirements based on system
+    if system_label == "NavIC":
+        service_reqs = NAVIK_SERVICE_REQUIREMENTS
+    elif system_label == "QZSS":
+        service_reqs = QZSS_SERVICE_REQUIREMENTS
+    elif system_label == "BeiDou-3":
+        service_reqs = BEIDOU3_SERVICE_REQUIREMENTS
+    else:
+        service_reqs = {}
+    
+    # Check if we have TLE data
+    has_tle_lines = 'TLE_LINE1' in df_all.columns and 'TLE_LINE2' in df_all.columns
+    
+    if not has_tle_lines:
+        st.warning("⚠️ Historical TLE lines not available. Please re-run the analysis to fetch updated data with TLE information.")
+        st.info("💡 Tip: Clear browser cache and re-fetch data to get historical TLE lines.")
+        return
+    
+    with st.spinner("Calculating historical central longitudes... This may take a moment."):
+        ts = load.timescale()
+        results = {}
+        
+        # Process each satellite
+        for sat_name in sorted(df_all['satellite'].unique()):
+            sat_df = df_all[df_all['satellite'] == sat_name].copy()
+            sat_df = sat_df.dropna(subset=['TLE_LINE1', 'TLE_LINE2'])
+            
+            if len(sat_df) == 0:
+                continue
+            
+            # Group by week to reduce computation (one sample per week)
+            sat_df['week'] = sat_df['EPOCH'].dt.isocalendar().week.astype(str) + '-' + sat_df['EPOCH'].dt.isocalendar().year.astype(str)
+            weekly_tles = sat_df.groupby('week').first().reset_index()
+            
+            results[sat_name] = {'dates': [], 'mean_lons': [], 'lon_std': []}
+            
+            for _, row in weekly_tles.iterrows():
+                try:
+                    # Reconstruct satellite from TLE
+                    tle_line1 = row['TLE_LINE1']
+                    tle_line2 = row['TLE_LINE2']
+                    obj_name = row.get('OBJECT_NAME', sat_name)
+                    
+                    satellite = EarthSatellite(tle_line1, tle_line2, obj_name, ts)
+                    
+                    # Get epoch from TLE
+                    epoch = row['EPOCH']
+                    if epoch.tzinfo is None:
+                        epoch = epoch.replace(tzinfo=timezone.utc)
+                    
+                    # Generate time steps over 24 hours centered on epoch
+                    timestep_minutes = 15
+                    num_steps = int((24 * 60) / timestep_minutes)
+                    
+                    longitudes = []
+                    for i in range(num_steps):
+                        dt = epoch - timedelta(hours=12) + timedelta(minutes=i * timestep_minutes)
+                        t = ts.from_datetime(dt)
+                        try:
+                            geocentric = satellite.at(t)
+                            subpoint = wgs84.subpoint(geocentric)
+                            longitudes.append(subpoint.longitude.degrees)
+                        except Exception:
+                            continue
+                    
+                    if len(longitudes) < 10:  # Need minimum data points
+                        continue
+                    
+                    # Compute circular mean longitude
+                    lons_rad = np.deg2rad(longitudes)
+                    x = np.cos(lons_rad)
+                    y = np.sin(lons_rad)
+                    mean_x = np.mean(x)
+                    mean_y = np.mean(y)
+                    mean_lon_rad = np.arctan2(mean_y, mean_x)
+                    mean_lon = np.rad2deg(mean_lon_rad)
+                    
+                    # Compute circular standard deviation
+                    R = np.sqrt(mean_x**2 + mean_y**2)
+                    if R > 0 and R <= 1:
+                        circular_std = np.rad2deg(np.sqrt(-2 * np.log(R)))
+                    else:
+                        circular_std = 0
+                    
+                    results[sat_name]['dates'].append(epoch)
+                    results[sat_name]['mean_lons'].append(mean_lon)
+                    results[sat_name]['lon_std'].append(circular_std)
+                    
+                except Exception as e:
+                    continue
+        
+        if not results or all(len(v['dates']) == 0 for v in results.values()):
+            st.warning("No historical central longitude data could be calculated.")
+            return
+        
+        # Create the plot
+        fig = go.Figure()
+        
+        colors = px.colors.qualitative.Plotly
+        
+        for idx, sat_name in enumerate(sorted(results.keys())):
+            if len(results[sat_name]['dates']) == 0:
+                continue
+            
+            color = colors[idx % len(colors)]
+            
+            # Add mean longitude trace
+            fig.add_trace(go.Scatter(
+                x=results[sat_name]['dates'],
+                y=results[sat_name]['mean_lons'],
+                mode='markers+lines',
+                name=sat_name,
+                marker=dict(size=8, color=color),
+                line=dict(width=2, color=color),
+                hovertemplate=(
+                    f"<b>{sat_name}</b><br>" +
+                    "Date: %{x|%Y-%m-%d}<br>" +
+                    "Mean Longitude: %{y:.2f}°<br>" +
+                    "<extra></extra>"
+                )
+            ))
+            
+            # Add designated longitude reference line if available
+            designated_lon = None
+            if sat_name in service_reqs:
+                req = service_reqs[sat_name]
+                if 'longitude' in req:
+                    designated_lon = req['longitude']
+                elif 'central_longitude_deg' in req:
+                    designated_lon = req['central_longitude_deg']
+            
+            if designated_lon is not None:
+                date_range = [min(results[sat_name]['dates']), max(results[sat_name]['dates'])]
+                fig.add_trace(go.Scatter(
+                    x=date_range,
+                    y=[designated_lon, designated_lon],
+                    mode='lines',
+                    name=f"{sat_name} Target",
+                    line=dict(width=1, dash='dash', color=color),
+                    opacity=0.5,
+                    showlegend=False,
+                    hovertemplate=(
+                        f"<b>{sat_name} Designated</b><br>" +
+                        f"Target Longitude: {designated_lon:.2f}°<br>" +
+                        "<extra></extra>"
+                    )
+                ))
+        
+        # Update layout
+        fig.update_layout(
+            title=f"Historical Central Longitude - {system_label} Constellation",
+            xaxis_title="Date",
+            yaxis_title="Central Longitude (°)",
+            hovermode='closest',
+            height=600,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02
+            ),
+            margin=dict(t=60, b=40, l=60, r=150)
+        )
+        
+        fig.update_yaxes(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='rgba(128,128,128,0.2)'
+        )
+        
+        fig.update_xaxes(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='rgba(128,128,128,0.2)'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Add statistics table
+        with st.expander("📊 Central Longitude Statistics", expanded=False):
+            stats_data = []
+            for sat_name in sorted(results.keys()):
+                if len(results[sat_name]['mean_lons']) == 0:
+                    continue
+                
+                mean_lons = results[sat_name]['mean_lons']
+                dates = results[sat_name]['dates']
+                
+                # Calculate deviation from designated if available
+                designated_lon = None
+                if sat_name in service_reqs:
+                    req = service_reqs[sat_name]
+                    if 'longitude' in req:
+                        designated_lon = req['longitude']
+                    elif 'central_longitude_deg' in req:
+                        designated_lon = req['central_longitude_deg']
+                
+                current_lon = mean_lons[-1] if mean_lons else None
+                deviation = None
+                if designated_lon is not None and current_lon is not None:
+                    diff = current_lon - designated_lon
+                    while diff > 180:
+                        diff -= 360
+                    while diff < -180:
+                        diff += 360
+                    deviation = diff
+                
+                stats_data.append({
+                    'Satellite': sat_name,
+                    'Current Mean Lon (°)': f"{current_lon:.2f}" if current_lon else "N/A",
+                    'Designated Lon (°)': f"{designated_lon:.2f}" if designated_lon else "N/A",
+                    'Current Deviation (°)': f"{deviation:+.2f}" if deviation is not None else "N/A",
+                    'Lon Range (°)': f"{min(mean_lons):.2f} to {max(mean_lons):.2f}",
+                    'Data Points': len(mean_lons),
+                    'Period': f"{min(dates).strftime('%Y-%m-%d')} to {max(dates).strftime('%Y-%m-%d')}"
+                })
+            
+            if stats_data:
+                stats_df = pd.DataFrame(stats_data)
+                st.dataframe(stats_df, hide_index=True, use_container_width=True)
+        
+        st.caption("""
+        **Notes:**
+        - Each point represents the central (mean) longitude calculated from a historical TLE
+        - Dashed lines show the designated longitude slot for each satellite
+        - Central longitude is calculated using circular mean over a 24-hour window
+        - For IGSO satellites, this represents the "waist" of their figure-8 ground track
+        """)
+
+
 def plot_mean_longitude_over_time(df_all, satellites, start_date, end_date, timestep_minutes=15):
     """
     Plot mean longitude variation over time for satellites.
@@ -1535,7 +1788,7 @@ def plot_mean_longitude_map(satellites, reference_time, timestep_minutes=15, sys
     """
     import numpy as np
     from skyfield.api import load, wgs84
-    from config import NAVIK_SERVICE_REQUIREMENTS, QZSS_SERVICE_REQUIREMENTS, BEIDOU3_SERVICE_REQUIREMENTS
+    from config.config import NAVIK_SERVICE_REQUIREMENTS, QZSS_SERVICE_REQUIREMENTS, BEIDOU3_SERVICE_REQUIREMENTS
     
     # Select appropriate service requirements based on system
     if system_label == "NavIC":
