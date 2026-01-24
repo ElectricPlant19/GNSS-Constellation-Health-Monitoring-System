@@ -2,6 +2,8 @@
 
 A comprehensive real-time monitoring and analysis system for multiple Global Navigation Satellite System (GNSS) constellations including **NavIC (IRNSS)**, **QZSS (Michibiki)**, and **BeiDou-3**. This application provides satellite health assessment, orbital drift analysis, maneuver detection, longitude slot deviation tracking, and Dilution of Precision (DOP) calculations through an interactive Streamlit web interface.
 
+### 🚀 **Live Demo**: [https://gnss-constellation-health-monitoring-system.streamlit.app/](https://gnss-constellation-health-monitoring-system.streamlit.app/)
+
 ## 📑 Table of Contents
 
 - [Key Features](#-key-features)
@@ -27,6 +29,10 @@ A comprehensive real-time monitoring and analysis system for multiple Global Nav
 - **Modular Architecture**: Clean, maintainable codebase with separated concerns
 
 ## ⚡ Quick Start
+
+**Try it online:** [Live Demo](https://gnss-constellation-health-monitoring-system.streamlit.app/)
+
+**Or run locally:**
 
 ```bash
 # 1. Install dependencies
