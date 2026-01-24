@@ -747,16 +747,30 @@ if st.session_state.get('analysis_complete', False):
         
         health_df = pd.DataFrame(health_assessments)
         
-        # Calculate longitude deviations using satellite objects if available
-        if 'satellites_dop' in st.session_state and 'current_time' in st.session_state:
-            try:
-                from skyfield.api import load, wgs84
-                import numpy as np
-                from datetime import timedelta
-                
+        # Calculate longitude deviations - fetch TLEs directly if not already available
+        try:
+            from skyfield.api import load, wgs84
+            import numpy as np
+            from datetime import timedelta
+            from api.celestrak_api import fetch_tles_from_celestrak
+            from analysis.dop_calculations import parse_tle_data
+            
+            # Fetch TLE data for longitude calculation
+            norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
+            
+            # Use existing satellites_dop if available, otherwise fetch
+            if 'satellites_dop' in st.session_state:
                 satellites_dop = st.session_state['satellites_dop']
-                current_time = st.session_state['current_time']
+            else:
+                tle_data = fetch_tles_from_celestrak(norad_ids)
+                if tle_data:
+                    satellites_dop = parse_tle_data(tle_data, SAT_DICT)
+                else:
+                    satellites_dop = {}
+            
+            if satellites_dop:
                 ts = load.timescale()
+                current_time = datetime.now(timezone.utc)
                 
                 # Calculate mean longitude for each satellite over last 24 hours
                 for idx, row in health_df.iterrows():
@@ -822,26 +836,12 @@ if st.session_state.get('analysis_complete', False):
                             
                             health_df.at[idx, 'Lon Deviation Score'] = round(lon_score, 1)
                             
-                            # Recalculate overall score with longitude component
-                            weights = {
-                                'inc': 0.30,
-                                'maintenance': 0.25,
-                                'drift': 0.20,
-                                'longitude': 0.15,
-                                'uniformity': 0.10
-                            }
-                            
-                            # Get existing component scores (normalized to handle "N/A")
-                            components = {}
-                            # Note: We'd need to extract individual component scores from the health assessment
-                            # For now, just update the longitude-related fields
-                            
                         except Exception as e:
                             # If calculation fails for this satellite, leave as N/A
                             pass
-            except Exception as e:
-                # If overall calculation fails, proceed without longitude data
-                pass
+        except Exception as e:
+            # If overall calculation fails, proceed without longitude data
+            st.warning(f"Could not calculate longitude deviations: {str(e)[:50]}")
         
         # Health summary metrics
         st.markdown("### 📊 Overall Health Summary")
