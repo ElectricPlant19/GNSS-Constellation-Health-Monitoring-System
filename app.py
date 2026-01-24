@@ -16,7 +16,7 @@ from config.config import (
     GRAVEYARD_ORBIT_MIN, GEO_NOMINAL_ALTITUDE, GEO_ALTITUDE_TOLERANCE
 )
 from api.spacetrack_api import fetch_and_classify_satellite, fetch_multiple_tles
-from api.celestrak_api import fetch_tles_from_celestrak
+from api.celestrack_api import fetch_tles_from_celestrak
 from analysis.drift_analysis import assess_drift_health, get_drift_direction
 from analysis.maneuver_detection import detect_navik_maneuvers
 from analysis.health_assessment import assess_satellite_health_with_drift
