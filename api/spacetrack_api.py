@@ -38,25 +38,51 @@ def fetch_multiple_tles(norad_ids, username: str, password: str):
     """Fetch latest TLE data for multiple satellites."""
     session = get_spacetrack_session(username, password)
     ids_str = ','.join(map(str, norad_ids))
+    # Use 'gp' class instead of 'tle_latest' to avoid 404 errors
+    # Fetch data for last 30 days to ensure we get recent TLEs
+    # We use format/tle (2-lines) and manually add the name line
     query_url = (
-        f"https://www.space-track.org/basicspacedata/query/class/tle_latest/"
-        f"NORAD_CAT_ID/{ids_str}/orderby/NORAD_CAT_ID,ORDINAL/format/3le"
+        f"https://www.space-track.org/basicspacedata/query/class/gp/"
+        f"NORAD_CAT_ID/{ids_str}/EPOCH/>now-30/orderby/EPOCH desc/format/tle"
     )
+    
     resp = session.get(query_url, timeout=60)
     if resp.status_code != 200:
         raise Exception(f"Failed to fetch TLE data: HTTP {resp.status_code}")
     
-    # Process the text to remove "0 " prefix from name lines (Space-Track 3LE format)
-    # This ensures compatibility with parsers expecting standard TLE format
-    raw_text = resp.text
-    cleaned_lines = []
-    for line in raw_text.split('\n'):
-        if line.startswith('0 '):
-            cleaned_lines.append(line[2:].strip())
+    # Process 2-line TLEs into 3-line format (Name, L1, L2) keeping only latest per satellite
+    lines = resp.text.strip().split('\n')
+    
+    # Dictionary to store latest TLE per sat_id: {sat_id: [line1, line2]}
+    # Since we ordered by EPOCH desc, the first occurrence we see is the latest
+    latest_tles = {}
+    
+    i = 0
+    while i < len(lines) - 1:
+        line1 = lines[i].strip()
+        line2 = lines[i+1].strip()
+        
+        if line1.startswith('1 ') and line2.startswith('2 '):
+            try:
+                # Extract NORAD ID from line 1 columns 2-7
+                norad_id = int(line1[2:7])
+                if norad_id not in latest_tles:
+                    latest_tles[norad_id] = [line1, line2]
+            except ValueError:
+                pass
+            i += 2
         else:
-            cleaned_lines.append(line)
+            i += 1
             
-    return '\n'.join(cleaned_lines)
+    # Reconstruct 3-line format for parser
+    # Parser uses locally mapped name based on NORAD ID, so generic name in line 0 is fine
+    output_lines = []
+    for sat_id, tle_lines in latest_tles.items():
+        output_lines.append(f"0 SATELLITE {sat_id}")
+        output_lines.append(tle_lines[0])
+        output_lines.append(tle_lines[1])
+        
+    return '\n'.join(output_lines)
 
 
 def fetch_and_classify_satellite(norad_id: int, start_date: str, end_date: str,
