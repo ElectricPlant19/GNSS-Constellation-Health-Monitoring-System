@@ -7,7 +7,7 @@ import streamlit as st
 import time
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_tles_from_celestrack(norad_ids):
+def fetch_tles_from_celestrak(norad_ids):
     """
     Fetch TLE data from CelesTrak for a list of NORAD IDs.
     Uses retry logic and alternative endpoints for cloud reliability.
