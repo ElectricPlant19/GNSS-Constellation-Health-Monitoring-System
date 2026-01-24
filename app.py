@@ -755,29 +755,30 @@ if st.session_state.get('analysis_complete', False):
         health_df = pd.DataFrame(health_assessments)
         
         # Calculate longitude deviations - fetch TLEs directly if not already available
-        try:
-            from skyfield.api import load, wgs84
-            import numpy as np
-            from datetime import timedelta
-            from api.celestrak_api import fetch_tles_from_celestrak
-            from analysis.dop_calculations import parse_tle_data
-            
-            # Fetch TLE data for longitude calculation
-            norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
-            
-            # Use existing satellites_dop if available, otherwise fetch
-            if 'satellites_dop' in st.session_state:
-                satellites_dop = st.session_state['satellites_dop']
-            else:
-                tle_data = fetch_tles_from_celestrak(norad_ids)
-                if tle_data:
-                    satellites_dop = parse_tle_data(tle_data, SAT_DICT)
+        with st.spinner("Calculating longitude deviations from TLE data..."):
+            try:
+                from skyfield.api import load, wgs84
+                import numpy as np
+                from datetime import timedelta
+                from api.celestrak_api import fetch_tles_from_celestrak
+                from analysis.dop_calculations import parse_tle_data
+                
+                # Fetch TLE data for longitude calculation
+                norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
+                
+                # Use existing satellites_dop if available, otherwise fetch
+                if 'satellites_dop' in st.session_state:
+                    satellites_dop = st.session_state['satellites_dop']
                 else:
-                    satellites_dop = {}
-            
-            if satellites_dop:
-                ts = load.timescale()
-                current_time = datetime.now(timezone.utc)
+                    tle_data = fetch_tles_from_celestrak(norad_ids)
+                    if tle_data:
+                        satellites_dop = parse_tle_data(tle_data, SAT_DICT)
+                    else:
+                        satellites_dop = {}
+                
+                if satellites_dop:
+                    ts = load.timescale()
+                    current_time = datetime.now(timezone.utc)
                 
                 # Calculate mean longitude for each satellite over last 24 hours
                 for idx, row in health_df.iterrows():
@@ -846,9 +847,10 @@ if st.session_state.get('analysis_complete', False):
                         except Exception as e:
                             # If calculation fails for this satellite, leave as N/A
                             pass
-        except Exception as e:
-            # If overall calculation fails, proceed without longitude data
-            st.warning(f"Could not calculate longitude deviations: {str(e)[:50]}")
+            except Exception as e:
+                # If overall calculation fails, proceed without longitude data
+                st.warning(f"Could not calculate longitude deviations: {str(e)[:50]}")
+        
         
         # Health summary metrics
         st.markdown("### 📊 Overall Health Summary")
