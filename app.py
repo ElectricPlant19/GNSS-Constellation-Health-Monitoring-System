@@ -624,9 +624,14 @@ if st.session_state.get('analysis_complete', False):
         pattern_end_str = pattern_end_date.strftime("%Y-%m-%d")
         
         with st.spinner("Analyzing satellite health and maneuver patterns..."):
-            # Fetch pattern data for all satellites
+            # Fetch pattern data for all satellites with progress
             pattern_data = {}
-            for sat_name, norad in SAT_DICT.items():
+            sat_list = [s for s, n in SAT_DICT.items() if n is not None]
+            progress_bar = st.progress(0, text="Fetching historical pattern data...")
+            
+            for idx, sat_name in enumerate(sat_list):
+                norad = SAT_DICT[sat_name]
+                progress_bar.progress((idx + 1) / len(sat_list), text=f"Analyzing {sat_name}...")
                 try:
                     if norad is None:
                         continue
@@ -659,6 +664,8 @@ if st.session_state.get('analysis_complete', False):
                     }
                 except Exception as e:
                     pattern_data[sat_name] = None
+            
+            progress_bar.progress(1.0, text="Pattern analysis complete!")
             # Determine days where the constellation appears fully deployed
             # Count how many satellites have observations on each UTC date
             from collections import Counter
