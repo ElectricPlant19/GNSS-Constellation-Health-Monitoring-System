@@ -1,5 +1,6 @@
 """
 CelesTrak API module for fetching TLE data
+With Space-Track fallback for cloud environments where CelesTrak may be blocked
 """
 
 import requests
@@ -30,7 +31,7 @@ def fetch_tles_from_celestrak(norad_ids, timeout=10):
         'Accept': 'text/plain',
     }
     
-    # Quick connectivity check - if this fails, skip TLE fetch entirely
+    # Quick connectivity check - if this fails, skip CelesTrak entirely
     try:
         test_url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_ids[0]}&FORMAT=TLE"
         test_response = requests.get(test_url, timeout=5, headers=headers)
@@ -93,3 +94,38 @@ def fetch_tles_from_celestrak(norad_ids, timeout=10):
     
     return '\n'.join(all_tles)
 
+
+def fetch_tles_with_fallback(norad_ids, username=None, password=None, timeout=10):
+    """
+    Fetch TLE data with CelesTrak as primary source and Space-Track as fallback.
+    This is useful for cloud environments where CelesTrak may be blocked.
+    
+    Args:
+        norad_ids (list): List of NORAD IDs
+        username (str): Space-Track username (for fallback)
+        password (str): Space-Track password (for fallback)
+        timeout (int): Request timeout in seconds
+        
+    Returns:
+        tuple: (tle_data: str, source: str) - TLE data and the source used
+    """
+    if not norad_ids:
+        return "", "none"
+    
+    # Try CelesTrak first (no auth required)
+    tle_data = fetch_tles_from_celestrak(norad_ids, timeout=timeout)
+    if tle_data:
+        return tle_data, "celestrak"
+    
+    # Fall back to Space-Track if credentials provided
+    if username and password:
+        try:
+            from api.spacetrack_api import fetch_multiple_tles
+            tle_data = fetch_multiple_tles(norad_ids, username, password)
+            if tle_data:
+                return tle_data, "spacetrack"
+        except Exception as e:
+            # Space-Track also failed
+            pass
+    
+    return "", "none"
