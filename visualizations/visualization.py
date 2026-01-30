@@ -1464,6 +1464,21 @@ def plot_historical_central_longitude(df_all, system_label="NavIC"):
             if len(results[sat_name]['dates']) == 0:
                 continue
             
+            # Sort data by date to ensure the line connects points in chronological order
+            # Zip lists together, sort by date, and unzip
+            combined_data = sorted(zip(results[sat_name]['dates'], 
+                                       results[sat_name]['mean_lons'], 
+                                       results[sat_name]['lon_std']), 
+                                   key=lambda x: x[0])
+            
+            # Unzip back into separate lists
+            sorted_dates, sorted_lons, sorted_stds = zip(*combined_data)
+            
+            # Update results with sorted data
+            results[sat_name]['dates'] = list(sorted_dates)
+            results[sat_name]['mean_lons'] = list(sorted_lons)
+            results[sat_name]['lon_std'] = list(sorted_stds)
+            
             color = colors[idx % len(colors)]
             
             # Add mean longitude trace
