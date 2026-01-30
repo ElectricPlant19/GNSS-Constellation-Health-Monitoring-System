@@ -45,7 +45,7 @@ def assess_drift_health(drift_deg_per_day, sat_type, drift_tolerance_gso=0.05, d
     """
     abs_drift = abs(drift_deg_per_day)
     
-    if sat_type == 'GSO':
+    if sat_type in ['GSO', 'GEO']:
         tolerance = drift_tolerance_gso
         if abs_drift <= tolerance * 0.3:
             drift_score = 100
@@ -67,7 +67,8 @@ def assess_drift_health(drift_deg_per_day, sat_type, drift_tolerance_gso=0.05, d
             drift_score = 0
             drift_status = "Critical"
             drift_color = "🔴"
-    else:  # IGSO
+    else:  # IGSO, QZO
+        tolerance = drift_tolerance_igso
         tolerance = drift_tolerance_igso
         if abs_drift <= tolerance:
             drift_score = 100
