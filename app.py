@@ -365,10 +365,11 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("#### �️ Constellation")
 constellation = st.sidebar.selectbox(
     "Select constellation", 
-    ["NavIC", "QZSS", "BeiDou-3"], 
+    ["NavIC", "QZSS"], 
     index=0,
     help="Choose which satellite constellation to analyze"
 )
+st.sidebar.caption("🚀 BeiDou-3 support coming soon!")
 
 # Per-constellation configuration and info
 if constellation == "NavIC":
@@ -864,6 +865,27 @@ if st.session_state.get('analysis_complete', False):
                                     lon_score = max(0, 60 - ((abs_dev - 10.0) / 10.0) * 60)
                             
                             health_df.at[idx, 'Lon Deviation Score'] = round(lon_score, 1)
+
+                            # Append longitude remarks
+                            current_remarks = health_df.at[idx, 'Remarks']
+                            new_remark = ""
+                            if sat_type == 'GSO':
+                                if abs_dev <= 0.5:
+                                    new_remark = f"✅ Excellent longitude slot position ({longitude_deviation:+.2f}° from {designated_lon}°)"
+                                elif abs_dev <= 1.0:
+                                    new_remark = f"✓ Good longitude position ({longitude_deviation:+.2f}° from {designated_lon}°)"
+                                else:
+                                    new_remark = f"⚠️ Longitude deviation from designated slot ({longitude_deviation:+.2f}° from {designated_lon}°)"
+                            else:  # IGSO
+                                if abs_dev <= 5.0:
+                                    new_remark = f"✅ Within central longitude tolerance ({longitude_deviation:+.2f}° from {designated_lon}°)"
+                                else:
+                                    new_remark = f"⚠️ Central longitude deviation ({longitude_deviation:+.2f}° from {designated_lon}°)"
+                            
+                            if current_remarks:
+                                health_df.at[idx, 'Remarks'] = f"{current_remarks} | {new_remark}"
+                            else:
+                                health_df.at[idx, 'Remarks'] = new_remark
                             
                         except Exception as e:
                             # If calculation fails for this satellite, leave as N/A
