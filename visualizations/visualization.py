@@ -154,7 +154,7 @@ def plot_bounding_boxes(satellites, reference_time, timestep_minutes=15, prop_du
     position (latest TLE) and optionally shows location markers from
     `location_points`.
     """
-    st.subheader("🗺️ Ground Traces - All Satellites Combined")
+
 
     # Let the user choose trace direction/window
     time_window = st.radio("Trace Window:", ["Next 24 hours", "Past 24 hours"], horizontal=True)
@@ -2163,4 +2163,5 @@ def plot_mean_longitude_map(satellites, reference_time, timestep_minutes=15, sys
         
         *Solid lines show current mean longitude. Light dashed lines show designated longitude slots.*
         """)
+
 
