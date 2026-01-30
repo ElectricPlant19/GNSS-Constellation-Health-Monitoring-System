@@ -1381,8 +1381,15 @@ if st.session_state.get('analysis_complete', False):
         if show_plots or st.session_state.get('show_plots', False):
             st.session_state['show_plots'] = True
             
+            # Progress bar for better UX - only show on initial generation
+            viz_progress = None
+            if show_plots:
+                viz_progress = st.progress(0, text="Initializing visualizations...")
+            
             # Create visualization sub-tabs
             viz_tab1, viz_tab2, viz_tab3, viz_tab4 = st.tabs(["📈 Orbital Trends", "🌌 Sky Plots", "📡 DOP Trends", "🗺️ Ground Trace"])
+            
+            if viz_progress: viz_progress.progress(0.1, text="Generating orbital trends...")
             
             with viz_tab1:
                 st.markdown("### Orbital Parameter Trends")
@@ -1411,6 +1418,8 @@ if st.session_state.get('analysis_complete', False):
                 st.markdown("---")
                 plot_historical_central_longitude(df_all, system_label=system_label)
             
+            if viz_progress: viz_progress.progress(0.4, text="Generating sky plots...")
+            
             with viz_tab2:
                 st.markdown("### Sky Plots & Satellite Visibility")
                 
@@ -1431,7 +1440,8 @@ if st.session_state.get('analysis_complete', False):
                         sky_plot_name = sky_plot_location
                     
                     # Calculate satellite positions for selected location
-                    with st.spinner(f"Calculating satellite positions for {sky_plot_name}..."):
+                    # Only show spinner if we're not using the main progress bar
+                    with st.spinner(f"Calculating satellite positions for {sky_plot_name}...") if not viz_progress else st.container():
                         dop, visible_sats, sat_positions = calculate_dop_for_location(
                             satellites, sky_plot_lat, sky_plot_lon, current_time, 
                             elevation_mask_deg=elevation_mask
@@ -1461,6 +1471,8 @@ if st.session_state.get('analysis_complete', False):
                 else:
                     st.info("💡 Run DOP analysis to generate sky plots")
             
+            if viz_progress: viz_progress.progress(0.7, text="Generating DOP trends...")
+            
             with viz_tab3:
                 st.markdown("### DOP Time Series")
                 
@@ -1480,6 +1492,8 @@ if st.session_state.get('analysis_complete', False):
                 else:
                     st.info("💡 Run DOP analysis to generate DOP time series")
             
+            if viz_progress: viz_progress.progress(0.9, text="Generating ground traces...")
+            
             with viz_tab4:
                 st.markdown("### 🗺️ Ground Traces")
                 
@@ -1491,8 +1505,12 @@ if st.session_state.get('analysis_complete', False):
                     plot_bounding_boxes(satellites, reference_time, location_points=LOCATION_POINTS)
                 else:
                     st.info("💡 Run DOP analysis to generate 3D coverage plots")
-        else:
-            st.info("👆 Click the button above to generate visualizations")
+            
+            if viz_progress: 
+                viz_progress.progress(1.0, text="Visualizations generated!")
+                # Optional: Remove progress bar after a short delay or leave it at 100%
+                # st.empty() would remove it, but might cause layout shift. 
+                # Leaving it at 100% is often nicer UX than disappearance.
 
 
 else:
