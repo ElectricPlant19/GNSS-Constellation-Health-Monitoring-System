@@ -1391,9 +1391,13 @@ if st.session_state.get('analysis_complete', False):
                 plot_individual_satellites(df_all)
                 
                 # Combined plots
-                plot_combined_drift(df_all, system_label=system_label)
-                plot_combined_inclination(df_all, system_label=system_label)
-                plot_combined_altitude(df_all, system_label=system_label)
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    plot_combined_drift(df_all, system_label=system_label)
+                with col2:
+                    plot_combined_inclination(df_all, system_label=system_label)
+                with col3:
+                    plot_combined_altitude(df_all, system_label=system_label)
                 
                 # Mean longitude map view with deviation analysis
                 if st.session_state.get('satellites_dop') and st.session_state.get('current_time'):
