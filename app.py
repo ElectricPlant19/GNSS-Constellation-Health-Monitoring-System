@@ -89,9 +89,12 @@ def check_graveyard_orbit_satellites(df_all):
         
         # Determine satellite type
         if mean_incl < 10.0:
-            sat_type = "GSO"
+            sat_type = "GEO"
         else:
-            sat_type = "IGSO"
+            if "QZSS" in system_label:
+                sat_type = "QZO"
+            else:
+                sat_type = "IGSO"
         
         # Get recent altitude (last 10% of data points)
         recent_data = sat_df.tail(max(1, len(sat_df) // 10))
@@ -107,22 +110,22 @@ def check_graveyard_orbit_satellites(df_all):
         status = "✅ OPERATIONAL"
         details = []
         
-        # Check for graveyard orbit (applies to both GSO and IGSO)
+        # Check for graveyard orbit (applies to both GEO and IGSO/QZO)
         if current_altitude >= GRAVEYARD_ORBIT_MIN:
             status = "💀 GRAVEYARD ORBIT (DEAD)"
             details.append(f"Current altitude ({current_altitude:.1f} km) is in graveyard orbit zone (>{GRAVEYARD_ORBIT_MIN:.1f} km)")
             details.append(f"Satellite has been raised {altitude_deviation:.1f} km above nominal GEO altitude")
-        elif sat_type == "GSO" and abs(altitude_deviation) > GEO_ALTITUDE_TOLERANCE:
-            # For GSO satellites, check if they're within operational tolerance
+        elif sat_type in ["GSO", "GEO"] and abs(altitude_deviation) > GEO_ALTITUDE_TOLERANCE:
+            # For GEO satellites, check if they're within operational tolerance
             if altitude_deviation > 0:
                 status = "⚠️  ELEVATED ORBIT (POSSIBLY DECOMMISSIONED)"
                 details.append(f"Altitude {altitude_deviation:.1f} km above nominal GEO ({GEO_NOMINAL_ALTITUDE:.1f} km)")
             else:
                 status = "⚠️  LOW ORBIT (ANOMALOUS)"
                 details.append(f"Altitude {abs(altitude_deviation):.1f} km below nominal GEO ({GEO_NOMINAL_ALTITUDE:.1f} km)")
-        elif sat_type == "IGSO":
-            # For IGSO satellites, just note their altitude (they have elliptical orbits)
-            details.append(f"IGSO satellite with elliptical orbit (altitude varies)")
+        elif sat_type in ["IGSO", "QZO"]:
+            # For IGSO/QZO satellites, just note their altitude (they have elliptical orbits)
+            details.append(f"{sat_type} satellite with elliptical orbit (altitude varies)")
         
         # Print satellite status
         print(f"\n📡 {sat_name}")
@@ -1212,9 +1215,12 @@ if st.session_state.get('analysis_complete', False):
                 current_drift = sub['LonDrift_deg_per_day'].iloc[-1] if 'LonDrift_deg_per_day' in sub.columns and len(sub) > 0 else float('nan')  # Use instantaneous drift
                 
                 if 0.0 < mean_incl < 10.0:
-                    sat_type = 'GSO'
+                    sat_type = 'GEO'
                 elif mean_incl >= 10.0:
-                    sat_type = 'IGSO'
+                    if "QZSS" in system_label:
+                        sat_type = 'QZO'
+                    else:
+                        sat_type = 'IGSO'
                 else:
                     sat_type = 'Unclassified'
                 
