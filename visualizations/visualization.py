@@ -26,7 +26,7 @@ def plot_individual_satellites(df_all):
         with st.container():
             st.markdown(f"#### {sat_name}")
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             fig_incl = px.line(
@@ -75,36 +75,38 @@ def plot_individual_satellites(df_all):
                 st.plotly_chart(fig_alt, use_container_width=True)
             else:
                 st.info(f"No altitude data available for {sat_name}")
+
+        with col3:
+            if 'LonDrift_deg_per_day' in sat_df.columns and not sat_df['LonDrift_deg_per_day'].isna().all():
+                fig_drift = px.line(
+                    sat_df,
+                    x='EPOCH',
+                    y='LonDrift_deg_per_day',
+                    markers=True,
+                    title=f"{sat_name} - Longitudinal Drift",
+                    labels={'EPOCH': 'Date', 'LonDrift_deg_per_day': 'Drift (°/day)'}
+                )
+                fig_drift.update_traces(line_color='#4facfe', line_width=2.5, marker=dict(size=4))
+                fig_drift.update_layout(
+                    hovermode='x unified', 
+                    showlegend=False,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(size=12),
+                    margin=dict(t=50, b=30, l=30, r=30)
+                )
+                fig_drift.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
+                fig_drift.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
+                
+                # Add zero line for reference
+                fig_drift.add_hline(y=0, line_dash="dash", line_color="rgba(128,128,128,0.5)", line_width=2,
+                                   annotation_text="Zero Drift", annotation_position="right")
+                
+                st.plotly_chart(fig_drift, use_container_width=True)
+            else:
+                st.info(f"No drift data available for {sat_name}")
         
-        # Drift plot
-        if 'LonDrift_deg_per_day' in sat_df.columns and not sat_df['LonDrift_deg_per_day'].isna().all():
-            fig_drift = px.line(
-                sat_df,
-                x='EPOCH',
-                y='LonDrift_deg_per_day',
-                markers=True,
-                title=f"{sat_name} - Longitudinal Drift",
-                labels={'EPOCH': 'Date', 'LonDrift_deg_per_day': 'Drift (°/day)'}
-            )
-            fig_drift.update_traces(line_color='#4facfe', line_width=2.5, marker=dict(size=4))
-            fig_drift.update_layout(
-                hovermode='x unified', 
-                showlegend=False,
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(size=12),
-                margin=dict(t=50, b=30, l=30, r=30)
-            )
-            fig_drift.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
-            fig_drift.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
-            
-            # Add zero line for reference
-            fig_drift.add_hline(y=0, line_dash="dash", line_color="rgba(128,128,128,0.5)", line_width=2,
-                               annotation_text="Zero Drift", annotation_position="right")
-            
-            st.plotly_chart(fig_drift, use_container_width=True)
-        
-            st.divider()
+        st.divider()
 
 
 def plot_combined_drift(df_all, system_label="NavIC"):
