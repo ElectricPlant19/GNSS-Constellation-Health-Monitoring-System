@@ -526,28 +526,28 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     if drift_score is not None:
         if sat_type == 'GSO':
             if drift_status == "Excellent":
-                remarks.append(f"Excellent station-keeping ({drift_color} drift: {abs(mean_drift):.3f}°/day)")
+                remarks.append(f"Excellent station-keeping ({drift_color} drift: {abs(current_drift):.3f}°/day)")
             elif drift_status == "Good":
-                remarks.append(f"Good drift control ({drift_color} {abs(mean_drift):.3f}°/day)")
+                remarks.append(f"Good drift control ({drift_color} {abs(current_drift):.3f}°/day)")
             elif drift_status == "Fair":
-                remarks.append(f"⚠️ Moderate drift detected ({drift_color} {abs(mean_drift):.3f}°/day)")
+                remarks.append(f"⚠️ Moderate drift detected ({drift_color} {abs(current_drift):.3f}°/day)")
             elif drift_status == "Poor":
-                remarks.append(f"⚠️ High drift - requires correction ({drift_color} {abs(mean_drift):.3f}°/day)")
+                remarks.append(f"⚠️ High drift - requires correction ({drift_color} {abs(current_drift):.3f}°/day)")
             else:
-                remarks.append(f"🔴 Critical drift - immediate attention needed ({abs(mean_drift):.3f}°/day)")
+                remarks.append(f"🔴 Critical drift - immediate attention needed ({abs(current_drift):.3f}°/day)")
             
             # Add drift direction
-            if mean_drift > 0:
-                remarks.append(f"Drifting EASTWARD at {abs(mean_drift):.3f}°/day")
-            elif mean_drift < 0:
-                remarks.append(f"Drifting WESTWARD at {abs(mean_drift):.3f}°/day")
+            if current_drift > 0:
+                remarks.append(f"Drifting EASTWARD at {abs(current_drift):.3f}°/day")
+            elif current_drift < 0:
+                remarks.append(f"Drifting WESTWARD at {abs(current_drift):.3f}°/day")
         elif sat_type == 'IGSO':
             if drift_status == "Normal":
-                remarks.append(f"Normal IGSO drift ({drift_color} {abs(mean_drift):.3f}°/day)")
+                remarks.append(f"Normal IGSO drift ({drift_color} {abs(current_drift):.3f}°/day)")
             elif drift_status == "Elevated":
-                remarks.append(f"⚠️ Elevated IGSO drift ({drift_color} {abs(mean_drift):.3f}°/day)")
+                remarks.append(f"⚠️ Elevated IGSO drift ({drift_color} {abs(current_drift):.3f}°/day)")
             else:
-                remarks.append(f"⚠️ High IGSO drift ({drift_color} {abs(mean_drift):.3f}°/day)")
+                remarks.append(f"⚠️ High IGSO drift ({drift_color} {abs(current_drift):.3f}°/day)")
         
         # Enhanced remarks about drift stability and trend
         if drift_trend is not None:
