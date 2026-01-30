@@ -1376,15 +1376,27 @@ if st.session_state.get('analysis_complete', False):
     with tab4:
         st.markdown("## Visualizations & Plots")
         
-        show_plots = st.button("🎨 Generate All Visualizations", type="primary", use_container_width=True)
-        
-        if show_plots or st.session_state.get('show_plots', False):
+        # Callback to handle visualization generation stability
+        def start_visualization_generation():
             st.session_state['show_plots'] = True
+            st.session_state['run_viz_generation'] = True
+
+        st.button(
+            "🎨 Generate All Visualizations", 
+            type="primary", 
+            use_container_width=True,
+            on_click=start_visualization_generation
+        )
+        
+        # Check if we should show plots (persistent state)
+        if st.session_state.get('show_plots', False):
             
-            # Progress bar for better UX - only show on initial generation
+            # Progress bar logic - only runs once when the button was just clicked
             viz_progress = None
-            if show_plots:
+            if st.session_state.get('run_viz_generation', False):
                 viz_progress = st.progress(0, text="Initializing visualizations...")
+                # Reset the trigger so progress doesn't run again on next interaction
+                st.session_state['run_viz_generation'] = False
             
             # Create visualization sub-tabs
             viz_tab1, viz_tab2, viz_tab3, viz_tab4 = st.tabs(["📈 Orbital Trends", "🌌 Sky Plots", "📡 DOP Trends", "🗺️ Ground Trace"])
