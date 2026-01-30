@@ -241,6 +241,39 @@ def plot_combined_ground_tracks(bounding_boxes, latest_positions=None, location_
         # Add different tile layers
         folium.TileLayer('CartoDB positron').add_to(m)
         folium.TileLayer('CartoDB dark_matter').add_to(m)
+        
+        # Add Google Maps layers
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Maps',
+            overlay=False,
+            control=True
+        ).add_to(m)
+        
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Satellite',
+            overlay=False,
+            control=True
+        ).add_to(m)
+        
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Hybrid',
+            overlay=False,
+            control=True
+        ).add_to(m)
+        
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Terrain',
+            overlay=False,
+            control=True
+        ).add_to(m)
     
         # Create a feature group for each satellite
         for idx, (sat_name, box_data) in enumerate(bounding_boxes.items()):
@@ -1940,6 +1973,39 @@ def plot_mean_longitude_map(satellites, reference_time, timestep_minutes=15, sys
         # Add different tile layers
         folium.TileLayer('CartoDB positron').add_to(m)
         folium.TileLayer('CartoDB dark_matter').add_to(m)
+        
+        # Add Google Maps layers
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Maps',
+            overlay=False,
+            control=True
+        ).add_to(m)
+        
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Satellite',
+            overlay=False,
+            control=True
+        ).add_to(m)
+        
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Hybrid',
+            overlay=False,
+            control=True
+        ).add_to(m)
+        
+        folium.TileLayer(
+            tiles='https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+            attr='Google',
+            name='Google Terrain',
+            overlay=False,
+            control=True
+        ).add_to(m)
         
         # Add satellite markers and longitude lines
         for sat_pos in satellite_positions:
