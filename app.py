@@ -467,13 +467,13 @@ with st.sidebar.expander("⚙️ Advanced Settings", expanded=False):
                                           min_value=0.01, max_value=0.5, 
                                           value=DEFAULT_PARAMS["drift_tolerance_gso"], 
                                           step=0.01, format="%.2f")
-    min_maneuvers_per_month = st.number_input("Min Maneuvers/Month", min_value=0, 
-                                              max_value=10, value=DEFAULT_PARAMS["min_maneuvers_per_month"], step=1)
-    max_maneuvers_per_month = st.number_input("Max Maneuvers/Month", min_value=1, 
-                                              max_value=20, value=DEFAULT_PARAMS["max_maneuvers_per_month"], step=1)
+    # Use default values for maneuver thresholds (not exposed in UI)
+    min_maneuvers_per_month = DEFAULT_PARAMS["min_maneuvers_per_month"]
+    max_maneuvers_per_month = DEFAULT_PARAMS["max_maneuvers_per_month"]
     maneuver_uniformity_threshold = st.number_input("Maneuver Uniformity CoV", 
                                                    min_value=0.1, max_value=2.0, 
-                                                   value=DEFAULT_PARAMS["maneuver_uniformity_threshold"], step=0.1)
+                                                   value=DEFAULT_PARAMS["maneuver_uniformity_threshold"], step=0.1,
+                                                   help="Coefficient of Variation threshold for maneuver spacing. Lower values indicate more regular/uniform maneuver intervals. Values above this threshold suggest irregular station-keeping.")
 
 st.sidebar.markdown("---")
 
@@ -567,6 +567,8 @@ if run_analysis:
                 st.session_state['errors'] = errors
                 st.session_state['graveyard_sats'] = graveyard_sats
                 st.session_state['system_label'] = system_label
+                # Invalidate health cache so it runs fresh with new data
+                st.session_state['health_cache_valid'] = False
                 
                 # Check for graveyard orbit satellites (for logging)
                 check_graveyard_orbit_satellites(df_all)
@@ -609,51 +611,107 @@ if st.session_state.get('analysis_complete', False):
     with tab1:
         st.markdown(f"## Satellite Health Assessment")
         
-        maneuver_summary = []
-        all_maneuvers_df = pd.DataFrame()
-        health_assessments = []
+        # Check if health assessment is already cached to avoid rerunning on every interaction
+        health_cache_key = f"health_df_{start_date_str}_{end_date_str}_{constellation}"
+        maneuver_cache_key = f"maneuver_summary_{start_date_str}_{end_date_str}_{constellation}"
+        all_maneuvers_cache_key = f"all_maneuvers_df_{start_date_str}_{end_date_str}_{constellation}"
         
-        # Fetch last year's data for pattern analysis
-        from datetime import datetime, timezone
-        # Determine pattern analysis window: either last 365 days or user-selected range
-        if use_historical_pattern:
-            pattern_end_date = datetime.now(timezone.utc)
-            pattern_start_date = pattern_end_date - timedelta(days=365)
+        # Use cached results if available
+        if health_cache_key in st.session_state and st.session_state.get('health_cache_valid', False):
+            health_df = st.session_state[health_cache_key]
+            maneuver_summary = st.session_state.get(maneuver_cache_key, [])
+            all_maneuvers_df = st.session_state.get(all_maneuvers_cache_key, pd.DataFrame())
+            st.success("✅ Using cached health assessment results")
         else:
-            # Use selected analysis period for pattern analysis
-            pattern_start_date = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-            pattern_end_date = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-
-        pattern_start_str = pattern_start_date.strftime("%Y-%m-%d")
-        pattern_end_str = pattern_end_date.strftime("%Y-%m-%d")
+            # Run the full health assessment
+            maneuver_summary = []
+            all_maneuvers_df = pd.DataFrame()
+            health_assessments = []
         
-        with st.spinner("Analyzing satellite health and maneuver patterns..."):
-            # Fetch pattern data for all satellites with progress
-            pattern_data = {}
-            sat_list = [s for s, n in SAT_DICT.items() if n is not None]
-            progress_bar = st.progress(0, text="Fetching historical pattern data...")
+            # Fetch last year's data for pattern analysis
+            from datetime import datetime, timezone
+            # Determine pattern analysis window: either last 365 days or user-selected range
+            if use_historical_pattern:
+                pattern_end_date = datetime.now(timezone.utc)
+                pattern_start_date = pattern_end_date - timedelta(days=365)
+            else:
+                # Use selected analysis period for pattern analysis
+                pattern_start_date = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+                pattern_end_date = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+
+            pattern_start_str = pattern_start_date.strftime("%Y-%m-%d")
+            pattern_end_str = pattern_end_date.strftime("%Y-%m-%d")
             
-            for idx, sat_name in enumerate(sat_list):
-                norad = SAT_DICT[sat_name]
-                progress_bar.progress((idx + 1) / len(sat_list), text=f"Analyzing {sat_name}...")
-                try:
-                    if norad is None:
+            with st.spinner("Analyzing satellite health and maneuver patterns..."):
+                # Fetch pattern data for all satellites with progress
+                pattern_data = {}
+                sat_list = [s for s, n in SAT_DICT.items() if n is not None]
+                progress_bar = st.progress(0, text="Fetching historical pattern data...")
+                
+                for idx, sat_name in enumerate(sat_list):
+                    norad = SAT_DICT[sat_name]
+                    progress_bar.progress((idx + 1) / len(sat_list), text=f"Analyzing {sat_name}...")
+                    try:
+                        if norad is None:
+                            continue
+                        pattern_df = fetch_and_classify_satellite(
+                            norad_id=int(norad),
+                            start_date=pattern_start_str,
+                            end_date=pattern_end_str,
+                            username=username,
+                            password=password,
+                            igso_min=10,
+                            deviation_tol=0.3
+                        )
+                        pattern_df['EPOCH'] = pd.to_datetime(pattern_df['EPOCH'])
+                        pattern_df = pattern_df.sort_values('EPOCH').reset_index(drop=True)
+                        
+                        # Detect maneuvers in pattern data
+                        pattern_detected = detect_navik_maneuvers(
+                            pattern_df,
+                            sma_col='SEMIMAJOR_AXIS',
+                            inc_col='INCLINATION',
+                            z_thresh=z_threshold,
+                            sma_abs_thresh_km=sma_threshold,
+                            inc_abs_thresh_deg=inc_threshold,
+                            persist_window=int(persist_window)
+                        )
+                        pattern_maneuvers = pattern_detected[pattern_detected['MANEUVER']].copy()
+                        pattern_data[sat_name] = {
+                            'df': pattern_df,
+                            'maneuvers': pattern_maneuvers
+                        }
+                    except Exception as e:
+                        pattern_data[sat_name] = None
+                
+                progress_bar.progress(1.0, text="Pattern analysis complete!")
+                # Determine days where the constellation appears fully deployed
+                # Count how many satellites have observations on each UTC date
+                from collections import Counter
+                date_counter = Counter()
+                for sat_name, pdata in pattern_data.items():
+                    if pdata is None:
                         continue
-                    pattern_df = fetch_and_classify_satellite(
-                        norad_id=int(norad),
-                        start_date=pattern_start_str,
-                        end_date=pattern_end_str,
-                        username=username,
-                        password=password,
-                        igso_min=10,
-                        deviation_tol=0.3
-                    )
-                    pattern_df['EPOCH'] = pd.to_datetime(pattern_df['EPOCH'])
-                    pattern_df = pattern_df.sort_values('EPOCH').reset_index(drop=True)
+                    try:
+                        dates = pd.to_datetime(pdata['df']['EPOCH']).dt.date.unique().tolist()
+                        for d in dates:
+                            date_counter[d] += 1
+                    except Exception:
+                        continue
+
+                expected_constellation_size = len(SAT_DICT)
+                # require at least 75% of expected satellites present to consider the day 'deployed'
+                min_required = max(1, int(0.75 * expected_constellation_size))
+                deployed_dates = {d for d, cnt in date_counter.items() if cnt >= min_required}
+                # If we found no deployed dates (small sample), fall back to allowing all dates
+                if not deployed_dates:
+                    deployed_dates = None
+
+                for sat_name in sorted(df_all['satellite'].unique()):
+                    sat_df = df_all[df_all['satellite'] == sat_name].copy()
                     
-                    # Detect maneuvers in pattern data
-                    pattern_detected = detect_navik_maneuvers(
-                        pattern_df,
+                    sat_detected = detect_navik_maneuvers(
+                        sat_df,
                         sma_col='SEMIMAJOR_AXIS',
                         inc_col='INCLINATION',
                         z_thresh=z_threshold,
@@ -661,102 +719,65 @@ if st.session_state.get('analysis_complete', False):
                         inc_abs_thresh_deg=inc_threshold,
                         persist_window=int(persist_window)
                     )
-                    pattern_maneuvers = pattern_detected[pattern_detected['MANEUVER']].copy()
-                    pattern_data[sat_name] = {
-                        'df': pattern_df,
-                        'maneuvers': pattern_maneuvers
-                    }
-                except Exception as e:
-                    pattern_data[sat_name] = None
-            
-            progress_bar.progress(1.0, text="Pattern analysis complete!")
-            # Determine days where the constellation appears fully deployed
-            # Count how many satellites have observations on each UTC date
-            from collections import Counter
-            date_counter = Counter()
-            for sat_name, pdata in pattern_data.items():
-                if pdata is None:
-                    continue
-                try:
-                    dates = pd.to_datetime(pdata['df']['EPOCH']).dt.date.unique().tolist()
-                    for d in dates:
-                        date_counter[d] += 1
-                except Exception:
-                    continue
+                    
+                    ew_maneuvers = int(sat_detected['EW_MANEUVER'].sum()) if 'EW_MANEUVER' in sat_detected.columns else 0
+                    ns_maneuvers = int(sat_detected['NS_MANEUVER'].sum()) if 'NS_MANEUVER' in sat_detected.columns else 0
+                    
+                    maneuver_events = sat_detected[sat_detected['MANEUVER']].copy()
+                    maneuver_events['satellite'] = sat_name
+                    all_maneuvers_df = pd.concat([all_maneuvers_df, maneuver_events], ignore_index=True)
+                    
+                    maneuver_summary.append({
+                        'Satellite': sat_name,
+                        'E-W Maneuvers': ew_maneuvers,
+                        'N-S Maneuvers': ns_maneuvers,
+                        'Total Maneuvers': ew_maneuvers + ns_maneuvers,
+                        'Observation Period (days)': (sat_df['EPOCH'].max() - sat_df['EPOCH'].min()).days
+                    })
+                    
+                    # Use last year's data for health assessment if available
+                    if pattern_data.get(sat_name) is not None:
+                        health_sat_df = pattern_data[sat_name]['df'].copy()
+                        health_maneuvers = pattern_data[sat_name]['maneuvers'].copy()
+                    else:
+                        health_sat_df = sat_df.copy()
+                        health_maneuvers = maneuver_events.copy()
 
-            expected_constellation_size = len(SAT_DICT)
-            # require at least 75% of expected satellites present to consider the day 'deployed'
-            min_required = max(1, int(0.75 * expected_constellation_size))
-            deployed_dates = {d for d, cnt in date_counter.items() if cnt >= min_required}
-            # If we found no deployed dates (small sample), fall back to allowing all dates
-            if not deployed_dates:
-                deployed_dates = None
-
-            for sat_name in sorted(df_all['satellite'].unique()):
-                sat_df = df_all[df_all['satellite'] == sat_name].copy()
-                
-                sat_detected = detect_navik_maneuvers(
-                    sat_df,
-                    sma_col='SEMIMAJOR_AXIS',
-                    inc_col='INCLINATION',
-                    z_thresh=z_threshold,
-                    sma_abs_thresh_km=sma_threshold,
-                    inc_abs_thresh_deg=inc_threshold,
-                    persist_window=int(persist_window)
-                )
-                
-                ew_maneuvers = int(sat_detected['EW_MANEUVER'].sum()) if 'EW_MANEUVER' in sat_detected.columns else 0
-                ns_maneuvers = int(sat_detected['NS_MANEUVER'].sum()) if 'NS_MANEUVER' in sat_detected.columns else 0
-                
-                maneuver_events = sat_detected[sat_detected['MANEUVER']].copy()
-                maneuver_events['satellite'] = sat_name
-                all_maneuvers_df = pd.concat([all_maneuvers_df, maneuver_events], ignore_index=True)
-                
-                maneuver_summary.append({
-                    'Satellite': sat_name,
-                    'E-W Maneuvers': ew_maneuvers,
-                    'N-S Maneuvers': ns_maneuvers,
-                    'Total Maneuvers': ew_maneuvers + ns_maneuvers,
-                    'Observation Period (days)': (sat_df['EPOCH'].max() - sat_df['EPOCH'].min()).days
-                })
-                
-                # Use last year's data for health assessment if available
-                if pattern_data.get(sat_name) is not None:
-                    health_sat_df = pattern_data[sat_name]['df'].copy()
-                    health_maneuvers = pattern_data[sat_name]['maneuvers'].copy()
-                else:
-                    health_sat_df = sat_df.copy()
-                    health_maneuvers = maneuver_events.copy()
-
-                # If we computed deployed_dates, filter out days where constellation
-                # wasn't fully deployed (helps QZSS during ramp-up periods)
-                if deployed_dates is not None and not health_sat_df.empty:
-                    try:
-                        health_sat_df['EPOCH_date'] = pd.to_datetime(health_sat_df['EPOCH']).dt.date
-                        filtered_df = health_sat_df[health_sat_df['EPOCH_date'].isin(deployed_dates)].drop(columns=['EPOCH_date'])
-                        if not filtered_df.empty:
-                            health_sat_df = filtered_df.reset_index(drop=True)
-                        # Filter maneuvers by deployed dates as well
-                        if not health_maneuvers.empty:
-                            health_maneuvers['EPOCH_date'] = pd.to_datetime(health_maneuvers['EPOCH']).dt.date
-                            fm = health_maneuvers[health_maneuvers['EPOCH_date'].isin(deployed_dates)].drop(columns=['EPOCH_date'])
-                            if not fm.empty:
-                                health_maneuvers = fm.reset_index(drop=True)
-                    except Exception:
-                        # If anything goes wrong during filtering, fall back to unfiltered data
-                        pass
-                
-                health_data = assess_satellite_health_with_drift(
-                    sat_name, health_sat_df, health_maneuvers,
-                    inclination_tolerance, min_maneuvers_per_month,
-                    max_maneuvers_per_month, maneuver_uniformity_threshold,
-                    drift_tolerance_gso, service_requirements=SERVICE_REQS,
-                    pattern_maneuvers=health_maneuvers,
-                    pattern_df=health_sat_df
-                )
-                health_assessments.append(health_data)
+                    # If we computed deployed_dates, filter out days where constellation
+                    # wasn't fully deployed (helps QZSS during ramp-up periods)
+                    if deployed_dates is not None and not health_sat_df.empty:
+                        try:
+                            health_sat_df['EPOCH_date'] = pd.to_datetime(health_sat_df['EPOCH']).dt.date
+                            filtered_df = health_sat_df[health_sat_df['EPOCH_date'].isin(deployed_dates)].drop(columns=['EPOCH_date'])
+                            if not filtered_df.empty:
+                                health_sat_df = filtered_df.reset_index(drop=True)
+                            # Filter maneuvers by deployed dates as well
+                            if not health_maneuvers.empty:
+                                health_maneuvers['EPOCH_date'] = pd.to_datetime(health_maneuvers['EPOCH']).dt.date
+                                fm = health_maneuvers[health_maneuvers['EPOCH_date'].isin(deployed_dates)].drop(columns=['EPOCH_date'])
+                                if not fm.empty:
+                                    health_maneuvers = fm.reset_index(drop=True)
+                        except Exception:
+                            # If anything goes wrong during filtering, fall back to unfiltered data
+                            pass
+                    
+                    health_data = assess_satellite_health_with_drift(
+                        sat_name, health_sat_df, health_maneuvers,
+                        inclination_tolerance, min_maneuvers_per_month,
+                        max_maneuvers_per_month, maneuver_uniformity_threshold,
+                        drift_tolerance_gso, service_requirements=SERVICE_REQS,
+                        pattern_maneuvers=health_maneuvers,
+                        pattern_df=health_sat_df
+                    )
+                    health_assessments.append(health_data)
         
-        health_df = pd.DataFrame(health_assessments)
+            health_df = pd.DataFrame(health_assessments)
+            
+            # Cache the health assessment results to avoid reprocessing on page interactions
+            st.session_state[health_cache_key] = health_df
+            st.session_state[maneuver_cache_key] = maneuver_summary
+            st.session_state[all_maneuvers_cache_key] = all_maneuvers_df
+            st.session_state['health_cache_valid'] = True
         
         # Calculate longitude deviations - fetch TLEs directly if not already available
         st.info("📍 Calculating longitude deviations from TLE data...")
