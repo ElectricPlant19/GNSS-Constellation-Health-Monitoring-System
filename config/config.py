@@ -218,8 +218,8 @@ INACTIVE_SATELLITES = ["IRNSS-1C", "IRNSS-1D", "IRNSS-1E"]
 # Default analysis parameters
 DEFAULT_PARAMS = {
     "z_threshold": 3.5,
-    "sma_threshold": 0.5,
-    "inc_threshold": 0.01,
+    "sma_threshold": 1.5,  # SMA Change (km) - updated for NavIC
+    "inc_threshold": 0.1,  # Inclination Change (°) - updated for NavIC
     "persist_window": 2,
     "inclination_tolerance": 1.0,
     "drift_tolerance_gso": 0.05,
