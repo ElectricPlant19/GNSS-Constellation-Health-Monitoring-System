@@ -161,7 +161,7 @@ def update_constellation_gp_history(constellation_name: str, sat_dict: dict,
         sat_dict: Dictionary of satellite_name -> norad_id
         username: Space-Track username
         password: Space-Track password
-        days: Number of days of history to fetch
+        days: Number of days of history to fetch (default: 365 for full year pattern analysis)
         verbose: Print progress messages
     """
     if verbose:
@@ -221,8 +221,8 @@ def main():
     parser.add_argument('--password', '-p',
                         default=os.environ.get('SPACETRACK_PASSWORD'),
                         help='Space-Track password (or set SPACETRACK_PASSWORD env var)')
-    parser.add_argument('--days', '-d', type=int, default=90,
-                        help='Days of GP history to fetch (default: 90)')
+    parser.add_argument('--days', '-d', type=int, default=365,
+                        help='Days of GP history to fetch (default: 365 for full year)')
     parser.add_argument('--constellation', '-c', 
                         choices=['navic', 'qzss', 'beidou3', 'all'],
                         default='all',
