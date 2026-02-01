@@ -436,19 +436,10 @@ Customizable through sidebar:
 | `requests` | ≥2.31.0 | HTTP requests |
 | `skyfield` | ≥1.46 | Satellite positioning |
 
-## 🚀 Future Enhancements
-
-- [ ] GPS, GLONASS, Galileo support
-- [ ] PDF report export
-- [ ] Real-time alerting system
-- [ ] Historical trend comparison
-- [ ] Machine learning anomaly detection
-- [ ] API endpoint
-- [ ] Multi-user configurations
 
 ## 📝 License & Credits
 
-This project uses data from Space-Track.org (free registration required). Built with open-source libraries following modular design principles.
+This project uses data from Space-Track.org. Built with open-source libraries following modular design principles.
 
 **Made with ❤️ for GNSS monitoring and analysis**
 
