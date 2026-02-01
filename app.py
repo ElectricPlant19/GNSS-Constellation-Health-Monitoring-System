@@ -1178,7 +1178,7 @@ if st.session_state.get('analysis_complete', False):
         # Ensure required columns exist with default values
         required_cols = [
             'Satellite', 'Type', 'Health Status', 'Overall Score', 
-            'Target Incl. (°)', 'Mean Incl. (°)', 'Incl. Dev. (°)',
+            'Target Incl. (°)', 'Incl. (°)', 'Incl. Dev. (°)',
             'Altitude (km)', 'Current Drift (°/day)', 
             'Designated Lon (°)', 'Lon Slot Deviation (°)'
         ]
