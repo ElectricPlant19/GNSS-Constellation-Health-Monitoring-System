@@ -43,8 +43,19 @@ streamlit run app.py
 
 # 3. Open browser at http://localhost:8501
 
-# 4. Enter Space-Track credentials and start analyzing!
+# 4. Click "Load Bundled Data & Analyze" for instant results!
+#    (No API credentials needed for bundled mode)
 ```
+
+### 📦 Bundled Data Mode (Default)
+
+The app includes pre-cached TLE and orbital data, so you can:
+- **Load instantly** without API calls or credentials
+- **Work offline** - perfect for demos and slow connections
+- **See when data was cached** - timestamp displayed in sidebar
+- **Refresh anytime** - click "Refresh from API" for latest data
+
+**Need fresh data?** Disable "Use bundled data" checkbox and enter Space-Track credentials.
 
 **First time user?** Register for free at [Space-Track.org](https://www.space-track.org/auth/createAccount)
 
@@ -62,6 +73,16 @@ final__dash/
 ├── api/
 │   ├── spacetrack_api.py          # Space-Track.org API client
 │   └── celestrak_api.py           # CelesTrak API client
+│
+├── data/                           # Bundled offline data (NEW)
+│   ├── tle_cache.py               # Data loading/saving module
+│   ├── navic_tles.json            # Pre-cached NavIC TLEs
+│   ├── qzss_tles.json             # Pre-cached QZSS TLEs
+│   ├── beidou3_tles.json          # Pre-cached BeiDou-3 TLEs
+│   └── *_gp_history.json          # GP history data (when generated)
+│
+├── scripts/                        # Utility scripts (NEW)
+│   └── update_bundled_data.py     # Script to refresh bundled data
 │
 ├── analysis/
 │   ├── __init__.py                # Package exports
