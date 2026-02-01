@@ -21,6 +21,10 @@ from analysis.drift_analysis import assess_drift_health, get_drift_direction
 from analysis.maneuver_detection import detect_navik_maneuvers
 from analysis.health_assessment import assess_satellite_health_with_drift
 from analysis.dop_calculations import parse_tle_data, calculate_dop_for_location, get_dop_quality
+from data.tle_cache import (
+    load_bundled_tles, load_bundled_gp_history, get_tle_metadata, 
+    get_gp_history_metadata, format_timestamp_for_display
+)
 from visualizations.visualization import (
     plot_individual_satellites, plot_combined_drift, plot_bounding_boxes,
     plot_sky_plot, plot_animated_sky_plot, plot_dop_over_time, plot_combined_inclination,
@@ -423,6 +427,63 @@ use_historical_pattern = True  # Always use historical pattern for maneuver dete
 
 st.sidebar.markdown("---")
 
+# Data Source Settings - Bundled vs Live API
+st.sidebar.markdown("#### 📦 Data Source")
+use_bundled_data = st.sidebar.checkbox(
+    "Use bundled data (offline mode)", 
+    value=True,
+    help="Load pre-cached TLE and GP data for instant results. Disable to fetch fresh data from APIs."
+)
+
+# Show bundled data metadata if available
+if use_bundled_data:
+    constellation_key = constellation.lower()
+    gp_meta = get_gp_history_metadata(constellation_key)
+    tle_meta = get_tle_metadata(constellation_key)
+    
+    if gp_meta['available']:
+        st.sidebar.success(f"📅 GP Data: {format_timestamp_for_display(gp_meta['timestamp'])}")
+        st.sidebar.caption(f"Period: {gp_meta['start_date']} to {gp_meta['end_date']}")
+        
+        # Calculate data age
+        try:
+            data_timestamp = datetime.fromisoformat(gp_meta['timestamp'].replace('Z', '+00:00'))
+            data_age = datetime.now(timezone.utc) - data_timestamp
+            data_age_days = data_age.days
+            
+            if data_age_days < 7:
+                st.sidebar.info(f"✅ Data is {data_age_days} day(s) old - fresh!")
+            else:
+                st.sidebar.warning(f"⚠️ Data is {data_age_days} days old - consider refreshing")
+        except:
+            data_age_days = None
+    else:
+        st.sidebar.warning("⚠️ No bundled GP history available")
+        data_age_days = None
+    
+    if tle_meta['available']:
+        st.sidebar.success(f"📡 TLEs: {format_timestamp_for_display(tle_meta['timestamp'])}")
+    else:
+        st.sidebar.warning("⚠️ No bundled TLEs available")
+    
+    # Refresh button with appropriate warning
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("##### 🔄 Fetch Latest Data")
+    
+    # Show warning based on data age
+    if gp_meta['available'] and data_age_days is not None and data_age_days < 7:
+        st.sidebar.caption("⚠️ **Note:** Bundled data is less than a week old. Only refresh if you need the very latest data.")
+    
+    if st.sidebar.button("📡 Fetch Live Data from APIs", 
+                         help="Fetch latest data from Space-Track/CelesTrak APIs. Use only if bundled data is outdated."):
+        st.session_state['force_api_refresh'] = True
+        st.session_state['use_bundled_data'] = False
+        st.rerun()
+else:
+    st.sidebar.info("📡 Will fetch live data from APIs")
+
+st.sidebar.markdown("---")
+
 # DOP Settings - Simplified
 st.sidebar.markdown("#### 📡 DOP Location")
 use_custom_location = st.sidebar.checkbox("Custom location", value=False)
@@ -480,80 +541,230 @@ st.sidebar.markdown("---")
 
 # ==================== MAIN ANALYSIS ====================
 
+def load_bundled_gp_as_dataframes(constellation_key: str, sat_dict: dict) -> list:
+    """
+    Load bundled GP history and convert to DataFrames matching API fetch format.
+    
+    Returns:
+        List of DataFrames, one per satellite
+    """
+    import numpy as np
+    from config.config import R_EARTH
+    from analysis.drift_analysis import calculate_longitudinal_drift
+    
+    bundled = load_bundled_gp_history(constellation_key)
+    if not bundled or not bundled.get('satellites'):
+        return []
+    
+    all_dfs = []
+    sat_data = bundled.get('satellites', {})
+    
+    for sat_name, norad_id in sat_dict.items():
+        if sat_name not in sat_data:
+            continue
+        
+        records = sat_data[sat_name]
+        if not records:
+            continue
+        
+        df = pd.DataFrame(records)
+        
+        # Standardize column names
+        rename_map = {
+            'epoch': 'EPOCH',
+            'inclination': 'INCLINATION', 
+            'semimajor_axis': 'SEMIMAJOR_AXIS',
+            'mean_motion': 'MEAN_MOTION',
+            'ra_of_asc_node': 'RA_OF_ASC_NODE',
+            'arg_of_pericenter': 'ARG_OF_PERICENTER',
+            'mean_anomaly': 'MEAN_ANOMALY',
+            'eccentricity': 'ECCENTRICITY',
+            'tle_line1': 'TLE_LINE1',
+            'tle_line2': 'TLE_LINE2',
+            'object_name': 'OBJECT_NAME'
+        }
+        for old_col, new_col in rename_map.items():
+            if old_col in df.columns and new_col not in df.columns:
+                df.rename(columns={old_col: new_col}, inplace=True)
+        
+        df['EPOCH'] = pd.to_datetime(df['EPOCH'])
+        df['INCLINATION'] = df['INCLINATION'].astype(float)
+        
+        # Calculate longitudinal drift
+        if 'MEAN_MOTION' in df.columns:
+            df['MEAN_MOTION'] = df['MEAN_MOTION'].astype(float)
+            df['LonDrift_deg_per_day'] = calculate_longitudinal_drift(df['MEAN_MOTION'])
+        
+        # Classify satellite type
+        df['type'] = df['INCLINATION'].apply(
+            lambda x: 'GSO' if (x > 0.0 and x < 10.0) else ('IGSO' if x >= 10 else 'Unclassified')
+        )
+        
+        mean_incl = df['INCLINATION'].mean()
+        df['mean_inclination'] = mean_incl
+        df['maintained'] = df['INCLINATION'].apply(lambda x: abs(x - mean_incl) <= 0.3)
+        df['satellite'] = sat_name
+        
+        # Calculate altitude
+        if 'SEMIMAJOR_AXIS' in df.columns:
+            df['SEMIMAJOR_AXIS'] = df['SEMIMAJOR_AXIS'].astype(float)
+            df['altitude_km'] = df['SEMIMAJOR_AXIS'] - R_EARTH
+        else:
+            df['SEMIMAJOR_AXIS'] = np.nan
+            df['altitude_km'] = np.nan
+        
+        df = df.sort_values('EPOCH').reset_index(drop=True)
+        all_dfs.append(df)
+    
+    return all_dfs
+
+
 # Main Analysis Button - Prominent placement
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    run_analysis = st.button("🚀 Fetch Data & Run Analysis", type="primary", use_container_width=True)
+    button_label = "📦 Load Bundled Data & Analyze" if use_bundled_data else "🚀 Fetch Data & Run Analysis"
+    run_analysis = st.button(button_label, type="primary", use_container_width=True)
 
 if run_analysis:
-    if not username or not password:
-        st.error("❌ Space-Track credentials not configured. Please add credentials to `.streamlit/secrets.toml`")
-    else:
-        # Validate date range
-        if start_date > end_date:
-            st.error("❌ Start date must be before end date")
-        elif end_date > date_class.today():
-            st.error(f"❌ End date cannot be in the future. Today is {date_class.today().strftime('%Y-%m-%d')}")
-        else:
-            with st.spinner(f"🔄 Fetching {system_label} satellite data..."):
-                all_dfs = []
+    # Check if bundled data mode is enabled
+    constellation_key = constellation.lower()
+    
+    if use_bundled_data:
+        # Try to load from bundled data first
+        gp_meta = get_gp_history_metadata(constellation_key)
+        
+        if gp_meta['available']:
+            with st.spinner(f"📦 Loading bundled {system_label} data..."):
+                all_dfs = load_bundled_gp_as_dataframes(constellation_key, SAT_DICT)
                 errors = {}
-                
-                total_sats = len(SAT_DICT)
-                progress_placeholder = st.empty()
-                
-                for idx, (sat_name, norad) in enumerate(SAT_DICT.items(), 1):
-                    try:
-                        progress_placeholder.info(f"📡 Fetching {sat_name} ({idx}/{total_sats})... NORAD ID: {norad}")
-                        
-                        if norad is None:
-                            raise ValueError(f"NORAD ID not set for {sat_name}. Please update configuration.")
-                        df = fetch_and_classify_satellite(
-                            norad_id=int(norad),
-                            start_date=start_date_str,
-                            end_date=end_date_str,
-                            username=username,
-                            password=password,
-                            igso_min=10,
-                            deviation_tol=0.3
-                        )
-
-                        df['EPOCH'] = pd.to_datetime(df['EPOCH'])
-                        df = df.sort_values('EPOCH').reset_index(drop=True)
-
-                        if daily_only:
-                            df['date'] = df['EPOCH'].dt.date
-                            df = df.sort_values('EPOCH').groupby('date', as_index=False).first()
-                            df['EPOCH'] = pd.to_datetime(df['EPOCH'])
-
-                        df['satellite'] = sat_name
-
-                        if 'mean_inclination' not in df.columns:
-                            df['mean_inclination'] = df['INCLINATION'].mean()
-
-                        all_dfs.append(df)
-                        progress_placeholder.success(f"✅ {sat_name} fetched successfully ({len(df)} records)")
-
-                    except Exception as e:
-                        error_msg = str(e)
-                        if "timeout" in error_msg.lower():
-                            error_msg = f"Request timeout - Space-Track API is slow or unresponsive. Try a smaller date range."
-                        elif "No GP data found" in error_msg:
-                            error_msg = f"No data available for the selected date range ({start_date_str} to {end_date_str})"
-                        errors[sat_name] = error_msg
-                        progress_placeholder.warning(f"⚠️ {sat_name} failed: {error_msg}")
-                
-                progress_placeholder.empty()
-
-            if errors:
-                st.warning("⚠️ Some satellites failed to fetch:")
-                for s, msg in errors.items():
-                    st.write(f"- **{s}**: {msg}")
-
+            
             if not all_dfs:
-                st.error("❌ No data fetched for any satellite")
+                st.error("❌ Bundled data could not be loaded. Try disabling bundled mode.")
             else:
                 df_all = pd.concat(all_dfs, ignore_index=True, sort=False)
+                
+                # Filter by user's selected date range
+                bundled_start = df_all['EPOCH'].min()
+                bundled_end = df_all['EPOCH'].max()
+                user_start = pd.Timestamp(start_date_str)
+                user_end = pd.Timestamp(end_date_str)
+                
+                # Check if user's date range is within bundled data range
+                if user_start < bundled_start or user_end > bundled_end:
+                    st.warning(f"⚠️ **Note:** Bundled data covers {bundled_start.strftime('%Y-%m-%d')} to {bundled_end.strftime('%Y-%m-%d')}. "
+                              f"Your selected range ({start_date_str} to {end_date_str}) may be partially outside this. "
+                              f"Data will be filtered to available records.")
+                
+                # Apply date filter
+                df_all = df_all[(df_all['EPOCH'] >= user_start) & (df_all['EPOCH'] <= user_end + pd.Timedelta(days=1))]
+                
+                if df_all.empty:
+                    st.error(f"❌ No bundled data available for the selected period ({start_date_str} to {end_date_str}). "
+                            f"Bundled data covers {bundled_start.strftime('%Y-%m-%d')} to {bundled_end.strftime('%Y-%m-%d')}. "
+                            f"Try adjusting the date range or use live API fetch.")
+                else:
+                    # Apply daily_only filter if selected
+                    if daily_only:
+                        df_list = []
+                        for sat in df_all['satellite'].unique():
+                            sat_df = df_all[df_all['satellite'] == sat].copy()
+                            sat_df['date'] = sat_df['EPOCH'].dt.date
+                            sat_df = sat_df.sort_values('EPOCH').groupby('date', as_index=False).first()
+                            sat_df['EPOCH'] = pd.to_datetime(sat_df['EPOCH'])
+                            df_list.append(sat_df)
+                        df_all = pd.concat(df_list, ignore_index=True)
+                
+                    # Identify and remove graveyard satellites from analysis
+                    graveyard_sats = get_graveyard_satellites(df_all)
+                    if graveyard_sats:
+                        st.warning(f"⚠️ Excluding {len(graveyard_sats)} satellite(s) in graveyard orbit: {', '.join(sorted(graveyard_sats))}")
+                        df_all = df_all[~df_all['satellite'].isin(graveyard_sats)]
+                    
+                    # Store in session state
+                    st.session_state['df_all'] = df_all
+                    st.session_state['analysis_complete'] = True
+                    st.session_state['errors'] = errors
+                    st.session_state['graveyard_sats'] = graveyard_sats
+                    st.session_state['system_label'] = system_label
+                    st.session_state['data_source'] = 'bundled'
+                    st.session_state['data_timestamp'] = gp_meta['timestamp']
+                    st.session_state['health_cache_valid'] = False
+                    
+                    st.markdown(f'<div class="success-card"><strong>✅ Bundled data loaded successfully!</strong> Data from {format_timestamp_for_display(gp_meta["timestamp"])}. Explore the results below.</div>', unsafe_allow_html=True)
+        else:
+            st.warning("⚠️ No bundled data available for this constellation. Switching to API mode...")
+            use_bundled_data = False  # Fall through to API fetch
+    
+    if not use_bundled_data:
+        # Original API fetch logic
+        if not username or not password:
+            st.error("❌ Space-Track credentials not configured. Please add credentials to `.streamlit/secrets.toml`")
+        else:
+            # Validate date range
+            if start_date > end_date:
+                st.error("❌ Start date must be before end date")
+            elif end_date > date_class.today():
+                st.error(f"❌ End date cannot be in the future. Today is {date_class.today().strftime('%Y-%m-%d')}")
+            else:
+                with st.spinner(f"🔄 Fetching {system_label} satellite data..."):
+                    all_dfs = []
+                    errors = {}
+                    
+                    total_sats = len(SAT_DICT)
+                    progress_placeholder = st.empty()
+                    
+                    for idx, (sat_name, norad) in enumerate(SAT_DICT.items(), 1):
+                        try:
+                            progress_placeholder.info(f"📡 Fetching {sat_name} ({idx}/{total_sats})... NORAD ID: {norad}")
+                            
+                            if norad is None:
+                                raise ValueError(f"NORAD ID not set for {sat_name}. Please update configuration.")
+                            df = fetch_and_classify_satellite(
+                                norad_id=int(norad),
+                                start_date=start_date_str,
+                                end_date=end_date_str,
+                                username=username,
+                                password=password,
+                                igso_min=10,
+                                deviation_tol=0.3
+                            )
+
+                            df['EPOCH'] = pd.to_datetime(df['EPOCH'])
+                            df = df.sort_values('EPOCH').reset_index(drop=True)
+
+                            if daily_only:
+                                df['date'] = df['EPOCH'].dt.date
+                                df = df.sort_values('EPOCH').groupby('date', as_index=False).first()
+                                df['EPOCH'] = pd.to_datetime(df['EPOCH'])
+
+                            df['satellite'] = sat_name
+
+                            if 'mean_inclination' not in df.columns:
+                                df['mean_inclination'] = df['INCLINATION'].mean()
+
+                            all_dfs.append(df)
+                            progress_placeholder.success(f"✅ {sat_name} fetched successfully ({len(df)} records)")
+
+                        except Exception as e:
+                            error_msg = str(e)
+                            if "timeout" in error_msg.lower():
+                                error_msg = f"Request timeout - Space-Track API is slow or unresponsive. Try a smaller date range."
+                            elif "No GP data found" in error_msg:
+                                error_msg = f"No data available for the selected date range ({start_date_str} to {end_date_str})"
+                            errors[sat_name] = error_msg
+                            progress_placeholder.warning(f"⚠️ {sat_name} failed: {error_msg}")
+                    
+                    progress_placeholder.empty()
+
+                if errors:
+                    st.warning("⚠️ Some satellites failed to fetch:")
+                    for s, msg in errors.items():
+                        st.write(f"- **{s}**: {msg}")
+
+                if not all_dfs:
+                    st.error("❌ No data fetched for any satellite")
+                else:
+                    df_all = pd.concat(all_dfs, ignore_index=True, sort=False)
                 
                 # Identify and remove graveyard satellites from analysis
                 graveyard_sats = get_graveyard_satellites(df_all)
@@ -567,6 +778,8 @@ if run_analysis:
                 st.session_state['errors'] = errors
                 st.session_state['graveyard_sats'] = graveyard_sats
                 st.session_state['system_label'] = system_label
+                st.session_state['data_source'] = 'api'
+                st.session_state['data_timestamp'] = datetime.now(timezone.utc).isoformat()
                 # Invalidate health cache so it runs fresh with new data
                 st.session_state['health_cache_valid'] = False
                 
@@ -601,6 +814,14 @@ if st.session_state.get('analysis_complete', False):
         st.metric("Analysis Period", f"{date_range_days} days", f"{start_date_str} to {end_date_str}")
     with col4:
         st.metric("Data Points", len(df_all), f"Across {total_sats} satellites")
+    
+    # Show data source indicator
+    data_source = st.session_state.get('data_source', 'unknown')
+    data_timestamp = st.session_state.get('data_timestamp', '')
+    if data_source == 'bundled':
+        st.info(f"📦 **Data Source**: Bundled cache from {format_timestamp_for_display(data_timestamp)}")
+    elif data_source == 'api':
+        st.info(f"📡 **Data Source**: Live API fetch from {format_timestamp_for_display(data_timestamp)}")
     
     st.markdown("---")
     
@@ -779,7 +1000,7 @@ if st.session_state.get('analysis_complete', False):
             st.session_state[all_maneuvers_cache_key] = all_maneuvers_df
             st.session_state['health_cache_valid'] = True
         
-        # Calculate longitude deviations - fetch TLEs directly if not already available
+        # Calculate longitude deviations - use bundled TLEs if available, otherwise fetch
         st.info("📍 Calculating longitude deviations from TLE data...")
         lon_progress = st.progress(0, text="Initializing longitude deviation calculation...")
         try:
@@ -789,25 +1010,35 @@ if st.session_state.get('analysis_complete', False):
             from api.celestrak_api import fetch_tles_with_fallback
             from analysis.dop_calculations import parse_tle_data
             
-            lon_progress.progress(0.1, text="Fetching TLE data for longitude calculation...")
+            lon_progress.progress(0.1, text="Loading TLE data for longitude calculation...")
             
             # Fetch TLE data for longitude calculation
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
             
-            # Use existing satellites_dop if available, otherwise fetch with fallback
+            # Use existing satellites_dop if available, otherwise try bundled, then API
             if 'satellites_dop' in st.session_state and st.session_state['satellites_dop']:
                 satellites_dop = st.session_state['satellites_dop']
             else:
-                # Try CelesTrak first, fall back to Space-Track
-                tle_data, tle_source = fetch_tles_with_fallback(norad_ids, username, password, timeout=10)
-                if tle_data:
+                # Try bundled TLEs first
+                constellation_key = constellation.lower()
+                bundled_tles = load_bundled_tles(constellation_key)
+                
+                if bundled_tles and bundled_tles.get('tle_data'):
+                    tle_data = bundled_tles['tle_data']
                     satellites_dop = parse_tle_data(tle_data, SAT_DICT)
-                    # Store for reuse
                     st.session_state['satellites_dop'] = satellites_dop
-                    if tle_source == "spacetrack":
-                        st.info("📡 Using Space-Track API (CelesTrak unavailable)")
+                    st.caption(f"📦 Using bundled TLEs from {format_timestamp_for_display(bundled_tles.get('timestamp', ''))}")
                 else:
-                    satellites_dop = {}
+                    # Fall back to API
+                    tle_data, tle_source = fetch_tles_with_fallback(norad_ids, username, password, timeout=10)
+                    if tle_data:
+                        satellites_dop = parse_tle_data(tle_data, SAT_DICT)
+                        # Store for reuse
+                        st.session_state['satellites_dop'] = satellites_dop
+                        if tle_source == "spacetrack":
+                            st.info("📡 Using Space-Track API (CelesTrak unavailable)")
+                    else:
+                        satellites_dop = {}
             
             # If no TLE data available, skip longitude calculation with warning
             if not satellites_dop:
@@ -1593,7 +1824,6 @@ else:
     <div class="info-card">
         <h4>🚀 Getting Started</h4>
         <ol>
-            <li>Enter your <strong>Space-Track credentials</strong> in the sidebar</li>
             <li>Select a <strong>constellation</strong> (NavIC, QZSS, or BeiDou-3)</li>
             <li>Choose your <strong>analysis period</strong></li>
             <li>Optionally adjust advanced settings</li>
