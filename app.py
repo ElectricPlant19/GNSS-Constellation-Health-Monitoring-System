@@ -1516,7 +1516,42 @@ if st.session_state.get('analysis_complete', False):
                     st.success(f"✅ Successfully loaded {len(satellites)} satellites for DOP calculations")
                     
                     current_time = datetime.now(timezone.utc)
-                    st.caption(f"Calculation Time (UTC): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    
+                    # Get TLE epoch from satellite objects (use the first active satellite's epoch as reference)
+                    tle_epochs = []
+                    for sat_name, sat_obj in satellites.items():
+                        try:
+                            # Skyfield satellite objects have an epoch property
+                            sat_epoch = sat_obj.epoch.utc_datetime()
+                            tle_epochs.append(sat_epoch)
+                        except Exception:
+                            continue
+                    
+                    if tle_epochs:
+                        # Use the most recent TLE epoch as the reference
+                        newest_tle_epoch = max(tle_epochs)
+                        oldest_tle_epoch = min(tle_epochs)
+                        tle_age_days = (current_time - newest_tle_epoch).total_seconds() / 86400
+                        
+                        # Display time information
+                        col_time1, col_time2 = st.columns(2)
+                        with col_time1:
+                            st.caption(f"📅 **TLE Epoch (newest):** {newest_tle_epoch.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+                        with col_time2:
+                            st.caption(f"⏰ **Calculation Time:** {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+                        
+                        # Warn if TLE data is old
+                        TLE_AGE_WARNING_DAYS = 7  # Warn if TLEs are older than 7 days
+                        TLE_AGE_CRITICAL_DAYS = 14  # Critical warning if older than 14 days
+                        
+                        if tle_age_days > TLE_AGE_CRITICAL_DAYS:
+                            st.error(f"🚨 **TLE data is {tle_age_days:.1f} days old!** Satellite positions may be significantly inaccurate. Consider updating TLE data.")
+                        elif tle_age_days > TLE_AGE_WARNING_DAYS:
+                            st.warning(f"⚠️ **TLE data is {tle_age_days:.1f} days old.** Satellite position accuracy may be degraded. For best results, update TLE data.")
+                        else:
+                            st.caption(f"✅ TLE data age: {tle_age_days:.1f} days (within acceptable range)")
+                    else:
+                        st.caption(f"Calculation Time (UTC): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
                     
                     dop_results = []
                     last_sat_positions = None
