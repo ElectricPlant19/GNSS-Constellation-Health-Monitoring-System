@@ -285,13 +285,14 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         inc_range = requirements["inclination_target_deg_range"]
         target_inclination = (inc_range[0] + inc_range[1]) / 2.0
     
-    mean_inclination = sat_df['INCLINATION'].mean()
+    # Use instantaneous (latest) inclination for health assessment
+    current_inclination = sat_df['INCLINATION'].iloc[-1]
     std_inclination = sat_df['INCLINATION'].std()
     
     # Determine satellite type
-    if 0.0 < mean_inclination < 10.0:
+    if 0.0 < current_inclination < 10.0:
         sat_type = 'GEO'
-    elif mean_inclination >= 10.0:
+    elif current_inclination >= 10.0:
         # Check if it's a QZSS satellite for specific QZO labeling
         is_qzss_system = service_requirements is not None and requirements.get('type') in ['IGSO', 'GSO']
         # If explicitly identified as QZSS or if we can infer it (though is_qzss flag is better)
@@ -315,7 +316,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     
     # Inclination score with stability consideration
     if target_inclination is not None:
-        inc_deviation = abs(mean_inclination - target_inclination)
+        inc_deviation = abs(current_inclination - target_inclination)
         
         # Penalize high standard deviation (unstable inclination)
         inc_stability_penalty = min(20, std_inclination * 10)
@@ -654,7 +655,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         'Health Status': f"{status_color} {health_status}",
         'Overall Score': round(overall_score, 1),
         'Target Incl. (°)': target_inclination if target_inclination is not None else "N/A",
-        'Mean Incl. (°)': round(mean_inclination, 3),
+        'Incl. (°)': round(current_inclination, 3),
         'Incl. Dev. (°)': round(inc_deviation, 3) if inc_deviation is not None else "N/A",
         'Altitude (km)': round(current_altitude, 1) if current_altitude is not None else "N/A",
         'Mean Drift (°/day)': round(mean_drift, 4) if mean_drift is not None else "N/A",
