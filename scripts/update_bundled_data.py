@@ -152,7 +152,7 @@ def update_constellation_tles(constellation_name: str, sat_dict: dict, verbose: 
 
 def update_constellation_gp_history(constellation_name: str, sat_dict: dict,
                                      username: str, password: str,
-                                     days: int = 90, verbose: bool = True):
+                                     days: int = 365, verbose: bool = True):
     """
     Update bundled GP history data for a constellation using Space-Track.
     
