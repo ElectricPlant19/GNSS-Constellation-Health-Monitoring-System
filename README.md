@@ -55,7 +55,7 @@ The app includes pre-cached TLE and orbital data, so you can:
 - **See when data was cached** - timestamp displayed in sidebar
 - **Refresh anytime** - click "Refresh from API" for latest data
 
-**Need fresh data?** Disable "Use bundled data" checkbox and enter Space-Track credentials.
+**Need fresh data?** Disable "Use bundled data" checkbox and use the in built SpaceTrack credentials to fetch data and run analysis.
 
 **First time user?** Register for free at [Space-Track.org](https://www.space-track.org/auth/createAccount)
 
