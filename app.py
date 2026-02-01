@@ -1454,6 +1454,78 @@ if st.session_state.get('analysis_complete', False):
                     pattern_summary_df = pd.DataFrame(pattern_summary)
                     st.dataframe(pattern_summary_df, hide_index=True, use_container_width=True)
                     st.caption("💡 **Pattern Analysis**: E-W maneuvers correct longitudinal drift, N-S maneuvers correct inclination.")
+                
+                # Add detailed maneuver events table
+                st.markdown("---")
+                st.markdown("#### 📋 Individual Maneuver Events")
+                
+                # Get all_maneuvers_df from session state
+                all_maneuvers_df = st.session_state.get(all_maneuvers_cache_key, pd.DataFrame())
+                
+                if not all_maneuvers_df.empty:
+                    # Group by satellite
+                    satellites_with_maneuvers = all_maneuvers_df['satellite'].unique()
+                    
+                    # Overall summary
+                    total_ew = all_maneuvers_df['EW_MANEUVER'].sum() if 'EW_MANEUVER' in all_maneuvers_df.columns else 0
+                    total_ns = all_maneuvers_df['NS_MANEUVER'].sum() if 'NS_MANEUVER' in all_maneuvers_df.columns else 0
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Maneuvers", len(all_maneuvers_df))
+                    with col2:
+                        st.metric("E-W Maneuvers", int(total_ew))
+                    with col3:
+                        st.metric("N-S Maneuvers", int(total_ns))
+                    
+                    st.markdown("")
+                    
+                    # Create expandable section for each satellite
+                    for sat_name in sorted(satellites_with_maneuvers):
+                        sat_events = all_maneuvers_df[all_maneuvers_df['satellite'] == sat_name]
+                        ew_count = sat_events['EW_MANEUVER'].sum() if 'EW_MANEUVER' in sat_events.columns else 0
+                        ns_count = sat_events['NS_MANEUVER'].sum() if 'NS_MANEUVER' in sat_events.columns else 0
+                        
+                        with st.expander(f"🛰️ {sat_name} — {len(sat_events)} maneuver(s) ({int(ew_count)} E-W, {int(ns_count)} N-S)"):
+                            # Build display table for this satellite
+                            sat_events_display = []
+                            
+                            for _, event in sat_events.iterrows():
+                                is_ew = event.get('EW_MANEUVER', False)
+                                is_ns = event.get('NS_MANEUVER', False)
+                                
+                                if is_ew and is_ns:
+                                    maneuver_type = "🔄 Combined"
+                                elif is_ew:
+                                    maneuver_type = "⬅️➡️ E-W"
+                                elif is_ns:
+                                    maneuver_type = "⬆️⬇️ N-S"
+                                else:
+                                    maneuver_type = "❓ Unknown"
+                                
+                                try:
+                                    epoch = pd.to_datetime(event['EPOCH'])
+                                    date_str = epoch.strftime('%Y-%m-%d %H:%M')
+                                except:
+                                    date_str = str(event.get('EPOCH', 'N/A'))
+                                
+                                sma_change = event.get('dSMA', None)
+                                inc_change = event.get('dINC', None)
+                                
+                                sat_events_display.append({
+                                    'Date': date_str,
+                                    'Type': maneuver_type,
+                                    'SMA Δ (km)': round(sma_change, 3) if pd.notna(sma_change) else 'N/A',
+                                    'Incl Δ (°)': round(inc_change, 4) if pd.notna(inc_change) else 'N/A'
+                                })
+                            
+                            sat_events_df = pd.DataFrame(sat_events_display)
+                            sat_events_df = sat_events_df.sort_values('Date', ascending=False)
+                            st.dataframe(sat_events_df, hide_index=True, use_container_width=True)
+                    
+                    st.caption("**SMA Δ**: Semi-major axis change | **Incl Δ**: Inclination change")
+                else:
+                    st.info("No individual maneuver events detected in the observation period.")
             else:
                 st.info("No maneuver data available")
         
