@@ -1492,14 +1492,33 @@ if st.session_state.get('analysis_complete', False):
         st.markdown("## Dilution of Precision (DOP) Analysis")
         try:
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
-            # Try CelesTrak first, fall back to Space-Track if blocked
-            tle_data, tle_source = fetch_tles_with_fallback(norad_ids, username, password, timeout=10)
+            tle_data = None
+            tle_source = "none"
+            
+            # Try bundled TLEs first if in offline mode
+            if use_bundled_data:
+                constellation_key = constellation.lower()
+                bundled_tles = load_bundled_tles(constellation_key)
+                
+                if bundled_tles and bundled_tles.get('tle_data'):
+                    tle_data = bundled_tles['tle_data']
+                    tle_source = "bundled"
+                    bundled_timestamp = bundled_tles.get('timestamp', 'Unknown')
+                    st.info(f"📦 Using bundled TLE data from {format_timestamp_for_display(bundled_timestamp)}")
+                else:
+                    st.warning("⚠️ No bundled TLEs available. Attempting to fetch from APIs...")
+            
+            # Fall back to API if bundled not available or not in offline mode
+            if not tle_data:
+                tle_data, tle_source = fetch_tles_with_fallback(norad_ids, username, password, timeout=10)
             
             if not tle_data:
                 st.error("❌ Failed to fetch TLE data for DOP calculations. Both CelesTrak and Space-Track are unavailable.")
             else:
                 if tle_source == "spacetrack":
                     st.info("📡 Using Space-Track API (CelesTrak unavailable)")
+                elif tle_source == "celestrak":
+                    st.info("📡 Using live TLE data from CelesTrak")
                 satellites = parse_tle_data(tle_data, SAT_DICT)
                 
                 if len(satellites) == 0:
