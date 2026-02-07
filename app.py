@@ -766,27 +766,27 @@ if run_analysis:
                 else:
                     df_all = pd.concat(all_dfs, ignore_index=True, sort=False)
                 
-                # Identify and remove graveyard satellites from analysis
-                graveyard_sats = get_graveyard_satellites(df_all)
-                if graveyard_sats:
-                    st.warning(f"⚠️ Excluding {len(graveyard_sats)} satellite(s) in graveyard orbit: {', '.join(sorted(graveyard_sats))}")
-                    df_all = df_all[~df_all['satellite'].isin(graveyard_sats)]
+                    # Identify and remove graveyard satellites from analysis
+                    graveyard_sats = get_graveyard_satellites(df_all)
+                    if graveyard_sats:
+                        st.warning(f"⚠️ Excluding {len(graveyard_sats)} satellite(s) in graveyard orbit: {', '.join(sorted(graveyard_sats))}")
+                        df_all = df_all[~df_all['satellite'].isin(graveyard_sats)]
                 
-                # Store in session state
-                st.session_state['df_all'] = df_all
-                st.session_state['analysis_complete'] = True
-                st.session_state['errors'] = errors
-                st.session_state['graveyard_sats'] = graveyard_sats
-                st.session_state['system_label'] = system_label
-                st.session_state['data_source'] = 'api'
-                st.session_state['data_timestamp'] = datetime.now(timezone.utc).isoformat()
-                # Invalidate health cache so it runs fresh with new data
-                st.session_state['health_cache_valid'] = False
+                    # Store in session state
+                    st.session_state['df_all'] = df_all
+                    st.session_state['analysis_complete'] = True
+                    st.session_state['errors'] = errors
+                    st.session_state['graveyard_sats'] = graveyard_sats
+                    st.session_state['system_label'] = system_label
+                    st.session_state['data_source'] = 'api'
+                    st.session_state['data_timestamp'] = datetime.now(timezone.utc).isoformat()
+                    # Invalidate health cache so it runs fresh with new data
+                    st.session_state['health_cache_valid'] = False
                 
-                # Check for graveyard orbit satellites (for logging)
-                check_graveyard_orbit_satellites(df_all)
+                    # Check for graveyard orbit satellites (for logging)
+                    check_graveyard_orbit_satellites(df_all)
                 
-                st.markdown('<div class="success-card"><strong>✅ Data fetched successfully!</strong> Explore the results below.</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="success-card"><strong>✅ Data fetched successfully!</strong> Explore the results below.</div>', unsafe_allow_html=True)
 
 
 # ==================== RESULTS DISPLAY ====================
