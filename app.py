@@ -119,7 +119,7 @@ def check_graveyard_orbit_satellites(df_all):
             status = "💀 GRAVEYARD ORBIT (DEAD)"
             details.append(f"Current altitude ({current_altitude:.1f} km) is in graveyard orbit zone (>{GRAVEYARD_ORBIT_MIN:.1f} km)")
             details.append(f"Satellite has been raised {altitude_deviation:.1f} km above nominal GEO altitude")
-        elif sat_type in ["GSO", "GEO"] and abs(altitude_deviation) > GEO_ALTITUDE_TOLERANCE:
+        elif sat_type == "GEO" and abs(altitude_deviation) > GEO_ALTITUDE_TOLERANCE:
             # For GEO satellites, check if they're within operational tolerance
             if altitude_deviation > 0:
                 status = "⚠️  ELEVATED ORBIT (POSSIBLY DECOMMISSIONED)"
@@ -524,7 +524,7 @@ with st.sidebar.expander("⚙️ Advanced Settings", expanded=False):
                                            min_value=0.1, max_value=5.0, 
                                            value=4.0 if constellation == "QZSS" else DEFAULT_PARAMS["inclination_tolerance"], step=0.1,
                                            help="QZSS IGSO satellites have ±4° tolerance (inclination target 43°)")
-    drift_tolerance_gso = st.number_input("GSO Drift Tolerance (°/day)", 
+    drift_tolerance_gso = st.number_input("GEO Drift Tolerance (°/day)", 
                                           min_value=0.01, max_value=0.5, 
                                           value=DEFAULT_PARAMS["drift_tolerance_gso"], 
                                           step=0.01, format="%.2f")
@@ -597,7 +597,7 @@ def load_bundled_gp_as_dataframes(constellation_key: str, sat_dict: dict) -> lis
         
         # Classify satellite type
         df['type'] = df['INCLINATION'].apply(
-            lambda x: 'GSO' if (x > 0.0 and x < 10.0) else ('IGSO' if x >= 10 else 'Unclassified')
+            lambda x: 'GEO' if (x > 0.0 and x < 10.0) else ('IGSO' if x >= 10 else 'Unclassified')
         )
         
         mean_incl = df['INCLINATION'].mean()
@@ -1102,7 +1102,7 @@ if st.session_state.get('analysis_complete', False):
                             abs_dev = abs(longitude_deviation)
                             sat_type = row['Type']
                             
-                            if sat_type == 'GSO':
+                            if sat_type == 'GEO':
                                 if abs_dev <= 0.5:
                                     lon_score = 100
                                 elif abs_dev <= 1.0:
@@ -1124,7 +1124,7 @@ if st.session_state.get('analysis_complete', False):
                             # Append longitude remarks
                             current_remarks = health_df.at[idx, 'Remarks']
                             new_remark = ""
-                            if sat_type == 'GSO':
+                            if sat_type == 'GEO':
                                 if abs_dev <= 0.5:
                                     new_remark = f"✅ Excellent longitude slot position ({longitude_deviation:+.2f}° from {designated_lon}°)"
                                 elif abs_dev <= 1.0:
@@ -1229,8 +1229,8 @@ if st.session_state.get('analysis_complete', False):
             #### 📊 Score Components:
             - **Inclination Score (30%)**: Deviation from target inclination with stability assessment
             - **Maintenance Score (25%)**: Dynamic pattern-based maneuver schedule analysis
-            - **Drift Score (20%)**: Longitudinal drift analysis (GSO: <0.05°/day, IGSO: <2°/day)
-            - **Longitude Deviation Score (15%)**: Slot position accuracy (GSO: <0.5° ideal, IGSO: <5° ideal)
+            - **Drift Score (20%)**: Longitudinal drift analysis (GEO: <0.05°/day, IGSO: <2°/day)
+            - **Longitude Deviation Score (15%)**: Slot position accuracy (GEO: <0.5° ideal, IGSO: <5° ideal)
             - **Uniformity Score (10%)**: Maneuver spacing regularity
             
             #### 🎯 Status Thresholds:
@@ -1407,7 +1407,7 @@ if st.session_state.get('analysis_complete', False):
                     # Determine satellite type
                     mean_incl = sat_df['INCLINATION'].mean()
                     if 0.0 < mean_incl < 10.0:
-                        sat_type = 'GSO'
+                        sat_type = 'GEO'
                     else:
                         sat_type = 'IGSO'
                     
@@ -1426,7 +1426,7 @@ if st.session_state.get('analysis_complete', False):
             
             drift_summary_df = pd.DataFrame(drift_summary)
             st.dataframe(drift_summary_df, hide_index=True, use_container_width=True)
-            st.caption(f"**GSO Drift Tolerance:** ±{drift_tolerance_gso}°/day | Positive = Eastward, Negative = Westward")
+            st.caption(f"**GEO Drift Tolerance:** ±{drift_tolerance_gso}°/day | Positive = Eastward, Negative = Westward")
         
         with subtab2:
             st.markdown("### Maneuver Detection Summary")
@@ -1941,7 +1941,7 @@ else:
         st.markdown("""
         - **DOP Calculations**: Precision metrics
         - **Visualizations**: Interactive plots & charts
-        - **Classification**: GSO/IGSO identification
+        - **Classification**: GEO/IGSO identification
         """)
     
     st.markdown("---")
