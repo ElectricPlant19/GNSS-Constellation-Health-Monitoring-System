@@ -59,14 +59,14 @@ CHINA_KEY_POINTS = {
 
 # NavIC service requirements (target longitudes and inclinations)
 # GEO satellites (inclination ~5°): 32.5°E, 83°E, 131.5°E
-# GSO satellites (inclination ~29-30°): 55°E (2 sats), 111.75°E (2 sats)
+# GEO satellites (inclination ~29-30°): 55°E (2 sats), 111.75°E (2 sats)
 NAVIK_SERVICE_REQUIREMENTS = {
-    "IRNSS-1B": {"longitude": 55.0, "inclination": 29.0},      # GSO
+    "IRNSS-1B": {"longitude": 55.0, "inclination": 29.0},      # GEO
     "IRNSS-1C": {"longitude": 83.0, "inclination": 5.0},       # GEO
-    "IRNSS-1D": {"longitude": 111.75, "inclination": 30.0},    # GSO
-    "IRNSS-1E": {"longitude": 111.75, "inclination": 29.0},    # GSO
+    "IRNSS-1D": {"longitude": 111.75, "inclination": 30.0},    # GEO
+    "IRNSS-1E": {"longitude": 111.75, "inclination": 29.0},    # GEO
     "IRNSS-1F": {"longitude": 32.5, "inclination": 5.0},       # GEO
-    "IRNSS-1I": {"longitude": 55.0, "inclination": 29.0},      # GSO
+    "IRNSS-1I": {"longitude": 55.0, "inclination": 29.0},      # GEO
     "NVS-01": {"longitude": 131.5, "inclination": 5.0}         # GEO
 }
 
@@ -82,7 +82,7 @@ QZSS_SATS = {
 # QZSS service/target requirements (per provided specifications)
 # Semi-major axis 42164 km ±10 km, eccentricity < 0.099, period ≈ 23h56m
 # IGSO trio: inclination 39–41°, argument of perigee 270° ±1°, central track 139°E ±5°
-# GSO members: inclination 0°, QZS-3 at 127°E, QZS-6 at 90.5°E
+# GEO members: inclination 0°, QZS-3 at 127°E, QZS-6 at 90.5°E
 QZSS_SERVICE_REQUIREMENTS = {
     "QZS-1R (Michibiki-1R)": {
         "type": "IGSO",
@@ -109,14 +109,14 @@ QZSS_SERVICE_REQUIREMENTS = {
         "ecc_max": 0.099
     },
     "QZS-3 (Michibiki-3)": {
-        "type": "GSO",
+        "type": "GEO",
         "central_longitude_deg": 127.0, "longitude_tol_deg": 0.5,
         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
         "sma_km": 42164.0, "sma_tol_km": 10.0,
         "ecc_max": 0.099
     },
     "QZS-6 (Michibiki-6)": {
-        "type": "GSO",
+        "type": "GEO",
         "central_longitude_deg": 90.5, "longitude_tol_deg": 0.5,
         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
         "sma_km": 42164.0, "sma_tol_km": 10.0,
