@@ -294,7 +294,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         sat_type = 'GEO'
     elif current_inclination >= 10.0:
         # Check if it's a QZSS satellite for specific QZO labeling
-        is_qzss_system = service_requirements is not None and requirements.get('type') in ['IGSO', 'GSO']
+        is_qzss_system = service_requirements is not None and requirements.get('type') in ['IGSO', 'GEO']
         # If explicitly identified as QZSS or if we can infer it (though is_qzss flag is better)
         if is_qzss_system:
              sat_type = 'QZO'
@@ -312,7 +312,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     maneuvers_per_month = num_maneuvers / observation_months if observation_months > 0 else 0
     
     # Detect if this is QZSS (service_requirements is not None and not NavIC)
-    is_qzss = service_requirements is not None and requirements.get('type') in ['IGSO', 'GSO']
+    is_qzss = service_requirements is not None and requirements.get('type') in ['IGSO', 'GEO']
     
     # Inclination score with stability consideration
     if target_inclination is not None:
@@ -428,7 +428,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         drift_color = drift_assessment['drift_color']
         
         # Stability penalty: penalize high standard deviation in drift (unstable station-keeping)
-        if sat_type in ['GSO', 'GEO']:
+        if sat_type == 'GEO':
             drift_stability = std_drift / drift_tolerance_gso
             if drift_stability > 2:
                 stability_penalty = min(30, (drift_stability - 2) * 10)
@@ -531,7 +531,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     
     # Enhanced drift remarks for both GEO (GSO) and IGSO/QZO
     if drift_score is not None:
-        if sat_type in ['GSO', 'GEO']:
+        if sat_type == 'GEO':
             if drift_status == "Excellent":
                 remarks.append(f"Excellent station-keeping ({drift_color} drift: {abs(current_drift):.3f}°/day)")
             elif drift_status == "Good":
@@ -563,7 +563,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
             elif drift_trend < -0.01:
                 remarks.append(f"📉 Drift magnitude decreasing (trend: {drift_trend:.3f}°/day)")
         
-        if sat_type in ['GSO', 'GEO'] and std_drift is not None:
+        if sat_type == 'GEO' and std_drift is not None:
             if std_drift > drift_tolerance_gso:
                 remarks.append(f"⚠️ Unstable drift (std dev: {std_drift:.3f}°/day)")
             elif std_drift > drift_tolerance_gso * 0.5:
@@ -572,7 +572,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     # Longitude slot deviation remarks
     if longitude_deviation is not None and designated_lon is not None:
         abs_dev = abs(longitude_deviation)
-        if sat_type in ['GSO', 'GEO']:
+        if sat_type == 'GEO':
             if abs_dev <= 0.5:
                 remarks.append(f"✅ Excellent longitude slot position ({longitude_deviation:+.2f}° from {designated_lon}°)")
             elif abs_dev <= 1.0:
