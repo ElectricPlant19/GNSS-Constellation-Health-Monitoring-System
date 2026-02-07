@@ -55,7 +55,7 @@ The app includes pre-cached TLE and orbital data, so you can:
 - **See when data was cached** - timestamp displayed in sidebar
 - **Refresh anytime** - click "Refresh from API" for latest data
 
-**Need fresh data?** Disable "Use bundled data" checkbox and use the in built SpaceTrack credentials to fetch data and run analysis.
+**Need fresh data?** Disable "Use bundled data" checkbox and enter Space-Track credentials.
 
 **First time user?** Register for free at [Space-Track.org](https://www.space-track.org/auth/createAccount)
 
@@ -282,7 +282,7 @@ Main Streamlit application providing:
 
 ### Component Weights
 
-| Component | Weight | GSO Tolerance | IGSO Tolerance |
+| Component | Weight | GEO Tolerance | IGSO Tolerance |
 |-----------|--------|---------------|----------------|
 | **Inclination** | 30% | ± 1.0° | ± 4.0° |
 | **Maintenance** | 25% | Pattern-based | Pattern-based |
@@ -308,13 +308,13 @@ Main Streamlit application providing:
 - **Good**: < tolerance
 - **Poor**: > tolerance
 
-**Longitudinal Drift** (GSO):
+**Longitudinal Drift** (GEO):
 - **Excellent**: < 0.015°/day
 - **Good**: < 0.05°/day
 - **Fair**: 0.05° - 0.10°/day
 - **Poor**: > 0.10°/day
 
-**Longitude Slot Deviation** (GSO):
+**Longitude Slot Deviation** (GEO):
 - **Excellent**: ≤ 0.5°
 - **Good**: 0.5° - 1.0°
 - **Needs Attention**: > 1.0°
@@ -344,7 +344,7 @@ Main Streamlit application providing:
 
 ### NavIC Orbital Slots
 - **GEO**: 32.5°E, 83°E, 131.5°E (inclination ~5°)
-- **GSO**: 55°E (2 sats), 111.75°E (2 sats) (inclination ~29-30°)
+- **GEO**: 55°E (2 sats), 111.75°E (2 sats) (inclination ~29-30°)
 
 ### Analysis Parameters
 
@@ -358,7 +358,7 @@ Customizable through sidebar:
 
 **Health Assessment:**
 - Inclination Tolerance (°): 1.0 (NavIC), 4.0 (QZSS IGSO)
-- GSO Drift Tolerance (°/day): 0.05
+- GEO Drift Tolerance (°/day): 0.05
 - Min/Max Maneuvers/Month: 1-8
 - Uniformity Threshold: 0.8
 
@@ -436,10 +436,19 @@ Customizable through sidebar:
 | `requests` | ≥2.31.0 | HTTP requests |
 | `skyfield` | ≥1.46 | Satellite positioning |
 
+## 🚀 Future Enhancements
+
+- [ ] GPS, GLONASS, Galileo support
+- [ ] PDF report export
+- [ ] Real-time alerting system
+- [ ] Historical trend comparison
+- [ ] Machine learning anomaly detection
+- [ ] API endpoint
+- [ ] Multi-user configurations
 
 ## 📝 License & Credits
 
-This project uses data from Space-Track.org. Built with open-source libraries following modular design principles.
+This project uses data from Space-Track.org (free registration required). Built with open-source libraries following modular design principles.
 
 **Made with ❤️ for GNSS monitoring and analysis**
 
