@@ -33,9 +33,9 @@ def assess_drift_health(drift_deg_per_day, sat_type, drift_tolerance_gso=0.05, d
     drift_deg_per_day : float
         Longitudinal drift in degrees/day
     sat_type : str
-        'GSO' or 'IGSO'
+        'GEO' or 'IGSO'
     drift_tolerance_gso : float
-        Acceptable drift for GSO satellites (degrees/day)
+        Acceptable drift for GEO satellites (degrees/day)
     drift_tolerance_igso : float
         Acceptable drift for IGSO satellites (degrees/day)
     
@@ -45,7 +45,7 @@ def assess_drift_health(drift_deg_per_day, sat_type, drift_tolerance_gso=0.05, d
     """
     abs_drift = abs(drift_deg_per_day)
     
-    if sat_type in ['GSO', 'GEO']:
+    if sat_type == 'GEO':
         tolerance = drift_tolerance_gso
         if abs_drift <= tolerance * 0.3:
             drift_score = 100
