@@ -1124,7 +1124,7 @@ def plot_drift_distribution(df_all):
             # Box plot of drift by satellite type
             df_all_with_type = df_all.copy()
             df_all_with_type['sat_type'] = df_all_with_type['INCLINATION'].apply(
-                lambda x: 'GSO' if (0.0 < x < 10.0) else ('IGSO' if x >= 10.0 else 'Unclassified')
+                lambda x: 'GEO' if (0.0 < x < 10.0) else ('IGSO' if x >= 10.0 else 'Unclassified')
             )
             
             fig_box = px.box(
@@ -2163,5 +2163,4 @@ def plot_mean_longitude_map(satellites, reference_time, timestep_minutes=15, sys
         
         *Solid lines show current mean longitude. Light dashed lines show designated longitude slots.*
         """)
-
 
