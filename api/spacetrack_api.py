@@ -153,7 +153,7 @@ def fetch_and_classify_satellite(norad_id: int, start_date: str, end_date: str,
 
     # Classify satellite type
     df['type'] = df['INCLINATION'].apply(
-        lambda x: 'GSO' if (x > 0.0 and x < 10.0) else ('IGSO' if x >= igso_min else 'Unclassified')
+        lambda x: 'GEO' if (x > 0.0 and x < 10.0) else ('IGSO' if x >= igso_min else 'Unclassified')
     )
 
     mean_incl = df['INCLINATION'].mean()
