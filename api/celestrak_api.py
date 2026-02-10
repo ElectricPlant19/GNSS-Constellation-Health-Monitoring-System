@@ -4,8 +4,26 @@ With Space-Track fallback for cloud environments where CelesTrak may be blocked
 """
 
 import requests
-import streamlit as st
 import time
+
+# Make streamlit optional so this module works in CI/scripts without streamlit
+try:
+    import streamlit as st
+except ImportError:
+    # Create a minimal stub so @st.cache_data and st.warning work outside Streamlit
+    class _Stub:
+        @staticmethod
+        def cache_data(func=None, *, ttl=None, show_spinner=True):
+            """No-op decorator when streamlit is not installed."""
+            if func is not None:
+                return func
+            def decorator(f):
+                return f
+            return decorator
+        @staticmethod
+        def warning(msg):
+            print(f"WARNING: {msg}")
+    st = _Stub()
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_tles_from_celestrak(norad_ids, timeout=10):
