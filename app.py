@@ -1950,7 +1950,7 @@ else:
     <div class="info-card">
         <h4>🚀 Getting Started</h4>
         <ol>
-            <li>Select a <strong>constellation</strong> (NavIC, QZSS, or BeiDou-3)</li>
+            <li>Select a <strong>constellation</strong> (NavIC, QZSS)</li>
             <li>Choose your <strong>analysis period</strong></li>
             <li>Optionally adjust advanced settings</li>
             <li>Click <strong>"Fetch Data & Run Analysis"</strong></li>
