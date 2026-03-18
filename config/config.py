@@ -21,6 +21,7 @@ NAVIK_SATS = {
     "IRNSS-1D": 40547,
     "IRNSS-1E": 41241,
     "IRNSS-1F": 41384,
+    "IRNSS-1G": 41469,
     "IRNSS-1I": 43286,
     "NVS-01": 56759
 }
@@ -66,6 +67,7 @@ NAVIK_SERVICE_REQUIREMENTS = {
     "IRNSS-1D": {"longitude": 111.75, "inclination": 30.0},    # GEO
     "IRNSS-1E": {"longitude": 111.75, "inclination": 29.0},    # GEO
     "IRNSS-1F": {"longitude": 32.5, "inclination": 5.0},       # GEO
+    "IRNSS-1G": {"longitude": 129.5, "inclination": 5.1},      # GEO (messaging-only; navigation services via NVS-1)
     "IRNSS-1I": {"longitude": 55.0, "inclination": 29.0},      # GEO
     "NVS-01": {"longitude": 131.5, "inclination": 5.0}         # GEO
 }
@@ -212,8 +214,9 @@ COMMISSION_DATES = {
 LOGIN_URL = "https://www.space-track.org/ajaxauth/login"
 
 # Inactive satellites (for DOP calculations)
-# IRNSS-1B is operational, but IRNSS-1C, 1D, 1E, and 1F have non-functional atomic clocks
-INACTIVE_SATELLITES = ["IRNSS-1C", "IRNSS-1D", "IRNSS-1E", "IRNSS-1F"]
+# IRNSS-1B is operational, but IRNSS-1C, 1D, 1E, 1F, and 1G are messaging-only (no navigation services)
+# (Navigation services for the 1G slot are now provided by NVS-1)
+INACTIVE_SATELLITES = ["IRNSS-1C", "IRNSS-1D", "IRNSS-1E", "IRNSS-1F", "IRNSS-1G"]
 
 # Default analysis parameters
 DEFAULT_PARAMS = {
