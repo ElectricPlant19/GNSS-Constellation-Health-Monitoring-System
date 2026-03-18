@@ -212,8 +212,8 @@ COMMISSION_DATES = {
 LOGIN_URL = "https://www.space-track.org/ajaxauth/login"
 
 # Inactive satellites (for DOP calculations)
-# IRNSS-1B is operational, but IRNSS-1C, 1D, and 1E have non-functional atomic clocks
-INACTIVE_SATELLITES = ["IRNSS-1C", "IRNSS-1D", "IRNSS-1E"]
+# IRNSS-1B is operational, but IRNSS-1C, 1D, 1E, and 1F have non-functional atomic clocks
+INACTIVE_SATELLITES = ["IRNSS-1C", "IRNSS-1D", "IRNSS-1E", "IRNSS-1F"]
 
 # Default analysis parameters
 DEFAULT_PARAMS = {
