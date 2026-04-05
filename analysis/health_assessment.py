@@ -680,4 +680,11 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         'Uniformity (CoV)': round(uniformity_cov, 3) if uniformity_cov else "N/A",
         'Remarks': " | ".join(remarks),
         'Pattern Analysis Period': f"{pattern_obs_start.strftime('%Y-%m-%d')} to {pattern_obs_end.strftime('%Y-%m-%d')}" if pattern_maneuvers is not None else "Selected date range"
+
+        #changes for longitudnal slot devialtion logical error fix 
+
+        '_inc_score': round(inc_score, 1) if inc_score is not None else None,
+        '_maintenance_score': round(maintenance_score, 1),
+        '_uniformity_score': round(uniformity_score, 1),
+        '_drift_score': round(drift_score, 1) if drift_score is not None else None,
     }
