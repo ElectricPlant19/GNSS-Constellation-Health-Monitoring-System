@@ -1121,6 +1121,29 @@ if st.session_state.get('analysis_complete', False):
                             
                             health_df.at[idx, 'Lon Deviation Score'] = round(lon_score, 1)
 
+                            # Recalculate overall score now that longitude score is available.
+                            # The old overall_score encodes: weighted_sum_without_lon / old_total_weight
+                            # So: new_score = (old_score * old_total_weight + lon_score * 0.15)
+                            #                  / (old_total_weight + 0.15)
+                            # This is cache-safe: it only needs the already-stored Overall Score and
+                            # _score_total_weight (with 0.85 as a safe fallback when that field is absent).
+                            _old_tw = row.get('_score_total_weight')
+                            if _old_tw is None or (isinstance(_old_tw, float) and pd.isna(_old_tw)):
+                                _old_tw = 0.85  # fallback: all four non-longitude components present
+                            _old_tw = float(_old_tw)
+                            _old_score = float(row['Overall Score'])
+                            _new_score = round((_old_score * _old_tw + float(lon_score) * 0.15) / (_old_tw + 0.15), 1)
+                            health_df.at[idx, 'Overall Score'] = _new_score
+
+                            if _new_score >= 80:
+                                health_df.at[idx, 'Health Status'] = "🟢 Healthy"
+                            elif _new_score >= 60:
+                                health_df.at[idx, 'Health Status'] = "🟡 Fair"
+                            elif _new_score >= 40:
+                                health_df.at[idx, 'Health Status'] = "🟠 Degraded"
+                            else:
+                                health_df.at[idx, 'Health Status'] = "🔴 Critical"
+
                             # Append longitude remarks
                             current_remarks = health_df.at[idx, 'Remarks']
                             new_remark = ""

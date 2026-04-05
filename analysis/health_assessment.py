@@ -276,19 +276,19 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     
     # Handle different inclination formats (NavIC uses "inclination", QZSS uses different keys)
     target_inclination = None
+    inc_range_bounds = None  # (low, high) for range-based requirements
     if "inclination" in requirements:
         target_inclination = requirements["inclination"]
     elif "inclination_target_deg" in requirements:
         target_inclination = requirements["inclination_target_deg"]
     elif "inclination_target_deg_range" in requirements:
-        # For IGSO satellites with inclination range, use the midpoint
-        inc_range = requirements["inclination_target_deg_range"]
-        target_inclination = (inc_range[0] + inc_range[1]) / 2.0
-    
+        inc_range_bounds = requirements["inclination_target_deg_range"]
+        target_inclination = (inc_range_bounds[0] + inc_range_bounds[1]) / 2.0
+
     # Use instantaneous (latest) inclination for health assessment
     current_inclination = sat_df['INCLINATION'].iloc[-1]
     std_inclination = sat_df['INCLINATION'].std()
-    
+
     # Determine satellite type
     if 0.0 < current_inclination < 10.0:
         sat_type = 'GEO'
@@ -302,26 +302,39 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
              sat_type = 'IGSO'
     else:
         sat_type = 'Unclassified'
-    
+
     observation_start = sat_df['EPOCH'].min()
     observation_end = sat_df['EPOCH'].max()
     observation_days = (observation_end - observation_start).days
     observation_months = observation_days / 30.0
-    
+
     num_maneuvers = len(maneuver_events)
     maneuvers_per_month = num_maneuvers / observation_months if observation_months > 0 else 0
-    
+
     # Detect if this is QZSS (service_requirements is not None and not NavIC)
     is_qzss = service_requirements is not None and requirements.get('type') in ['IGSO', 'GEO']
-    
+
     # Inclination score with stability consideration
     if target_inclination is not None:
-        inc_deviation = abs(current_inclination - target_inclination)
-        
+        # For range-based requirements (e.g. QZSS IGSO 39°–47°): score 100 when inside the
+        # valid band; apply a steeper penalty for excess deviation BEYOND the nearest band edge
+        # (2× the normal slope, so the score reaches 0 at half the tolerance outside the band).
+        if inc_range_bounds is not None:
+            lo, hi = inc_range_bounds
+            if lo <= current_inclination <= hi:
+                inc_deviation = 0.0   # within spec — no deviation to penalise
+                effective_tolerance = inc_tolerance
+            else:
+                inc_deviation = max(lo - current_inclination, current_inclination - hi)
+                effective_tolerance = inc_tolerance / 2.0  # steeper drop outside the band
+        else:
+            inc_deviation = abs(current_inclination - target_inclination)
+            effective_tolerance = inc_tolerance
+
         # Penalize high standard deviation (unstable inclination)
         inc_stability_penalty = min(20, std_inclination * 10)
-        
-        inc_score = max(0, 100 - (inc_deviation / inc_tolerance) * 100 - inc_stability_penalty)
+
+        inc_score = max(0, 100 - (inc_deviation / effective_tolerance) * 100 - inc_stability_penalty)
     else:
         inc_score = None
         inc_deviation = None
@@ -499,30 +512,38 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
 
     if len(components) == 0:
         overall_score = 50.0
+        total_weight = 0.0
     else:
         # Normalize weights for available components
         total_weight = sum(weights[k] for k in components.keys())
         weighted_sum = sum(components[k] * weights[k] for k in components.keys())
         overall_score = weighted_sum / total_weight
     
-    if overall_score >= 85:
-        health_status = "Excellent"
+    if overall_score >= 80:
+        health_status = "Healthy"
         status_color = "🟢"
-    elif overall_score >= 70:
-        health_status = "Good"
-        status_color = "🟡"
-    elif overall_score >= 50:
+    elif overall_score >= 60:
         health_status = "Fair"
+        status_color = "🟡"
+    elif overall_score >= 40:
+        health_status = "Degraded"
         status_color = "🟠"
     else:
-        health_status = "Needs Attention"
+        health_status = "Critical"
         status_color = "🔴"
     
     remarks = []
     
     # Inclination remarks
     if inc_score is not None and inc_deviation is not None:
-        if inc_deviation <= inc_tolerance * 0.3:
+        if inc_range_bounds is not None:
+            # Range-based requirement: report position within the band
+            lo, hi = inc_range_bounds
+            if lo <= current_inclination <= hi:
+                remarks.append(f"Inclination within spec ({current_inclination:.3f}°, range {lo}°–{hi}°)")
+            else:
+                remarks.append(f"⚠️ Inclination outside spec ({current_inclination:.3f}°, range {lo}°–{hi}°, excess {inc_deviation:.2f}°)")
+        elif inc_deviation <= inc_tolerance * 0.3:
             remarks.append(f"Excellent inclination control (±{inc_deviation:.2f}°)")
         elif inc_deviation <= inc_tolerance:
             remarks.append(f"Inclination within tolerance (±{inc_deviation:.2f}°)")
@@ -679,12 +700,6 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         'NS Pattern Confidence': ns_confidence.replace('_', ' ').title(),
         'Uniformity (CoV)': round(uniformity_cov, 3) if uniformity_cov else "N/A",
         'Remarks': " | ".join(remarks),
-        'Pattern Analysis Period': f"{pattern_obs_start.strftime('%Y-%m-%d')} to {pattern_obs_end.strftime('%Y-%m-%d')}" if pattern_maneuvers is not None else "Selected date range"
-
-        #changes for longitudnal slot devialtion logical error fix 
-
-        '_inc_score': round(inc_score, 1) if inc_score is not None else None,
-        '_maintenance_score': round(maintenance_score, 1),
-        '_uniformity_score': round(uniformity_score, 1),
-        '_drift_score': round(drift_score, 1) if drift_score is not None else None,
+        'Pattern Analysis Period': f"{pattern_obs_start.strftime('%Y-%m-%d')} to {pattern_obs_end.strftime('%Y-%m-%d')}" if pattern_maneuvers is not None else "Selected date range",
+        '_score_total_weight': round(total_weight, 4),
     }
