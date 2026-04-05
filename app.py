@@ -1011,22 +1011,25 @@ if st.session_state.get('analysis_complete', False):
             from analysis.dop_calculations import parse_tle_data
             
             lon_progress.progress(0.1, text="Loading TLE data for longitude calculation...")
-            
+
             # Fetch TLE data for longitude calculation
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
-            
+
+            # Use constellation-specific key to avoid cross-constellation cache pollution
+            constellation_key = constellation.lower()
+            sat_dop_key = f"satellites_dop_{constellation_key}"
+
             # Use existing satellites_dop if available, otherwise try bundled, then API
-            if 'satellites_dop' in st.session_state and st.session_state['satellites_dop']:
-                satellites_dop = st.session_state['satellites_dop']
+            if sat_dop_key in st.session_state and st.session_state[sat_dop_key]:
+                satellites_dop = st.session_state[sat_dop_key]
             else:
                 # Try bundled TLEs first
-                constellation_key = constellation.lower()
                 bundled_tles = load_bundled_tles(constellation_key)
-                
+
                 if bundled_tles and bundled_tles.get('tle_data'):
                     tle_data = bundled_tles['tle_data']
                     satellites_dop = parse_tle_data(tle_data, SAT_DICT)
-                    st.session_state['satellites_dop'] = satellites_dop
+                    st.session_state[sat_dop_key] = satellites_dop
                     st.caption(f"📦 Using bundled TLEs from {format_timestamp_for_display(bundled_tles.get('timestamp', ''))}")
                 else:
                     # Fall back to API
@@ -1034,7 +1037,7 @@ if st.session_state.get('analysis_complete', False):
                     if tle_data:
                         satellites_dop = parse_tle_data(tle_data, SAT_DICT)
                         # Store for reuse
-                        st.session_state['satellites_dop'] = satellites_dop
+                        st.session_state[sat_dop_key] = satellites_dop
                         if tle_source == "spacetrack":
                             st.info("📡 Using Space-Track API (CelesTrak unavailable)")
                     else:
@@ -1589,10 +1592,11 @@ if st.session_state.get('analysis_complete', False):
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
             tle_data = None
             tle_source = "none"
-            
+            constellation_key = constellation.lower()
+            sat_dop_key = f"satellites_dop_{constellation_key}"
+
             # Try bundled TLEs first if in offline mode
             if use_bundled_data:
-                constellation_key = constellation.lower()
                 bundled_tles = load_bundled_tles(constellation_key)
                 
                 if bundled_tles and bundled_tles.get('tle_data'):
@@ -1767,7 +1771,7 @@ if st.session_state.get('analysis_complete', False):
                     st.caption(f"*Elevation mask: {elevation_mask_deg}°")
                     
                     # Store for plotting
-                    st.session_state['satellites_dop'] = satellites
+                    st.session_state[sat_dop_key] = satellites
                     st.session_state['dop_results'] = dop_results
                     st.session_state['current_time'] = current_time
                     st.session_state['elevation_mask_deg'] = elevation_mask_deg
@@ -1826,8 +1830,8 @@ if st.session_state.get('analysis_complete', False):
                     plot_combined_altitude(df_all, system_label=system_label)
                 
                 # Mean longitude map view with deviation analysis
-                if st.session_state.get('satellites_dop') and st.session_state.get('current_time'):
-                    satellites = st.session_state['satellites_dop']
+                if st.session_state.get(sat_dop_key) and st.session_state.get('current_time'):
+                    satellites = st.session_state[sat_dop_key]
                     current_time = st.session_state['current_time']
                     plot_mean_longitude_map(satellites, current_time, system_label=system_label)
                 else:
@@ -1843,8 +1847,8 @@ if st.session_state.get('analysis_complete', False):
                 st.markdown("### Sky Plots & Satellite Visibility")
                 
                 # Azimuth-Elevation Sky Plot
-                if st.session_state.get('satellites_dop') and st.session_state.get('current_time'):
-                    satellites = st.session_state['satellites_dop']
+                if st.session_state.get(sat_dop_key) and st.session_state.get('current_time'):
+                    satellites = st.session_state[sat_dop_key]
                     current_time = st.session_state['current_time']
                     elevation_mask = st.session_state.get('elevation_mask_deg', elevation_mask_deg)
                     
@@ -1896,8 +1900,8 @@ if st.session_state.get('analysis_complete', False):
                 st.markdown("### DOP Time Series")
                 
                 # DOP Over Last 30 Days Plot
-                if st.session_state.get('satellites_dop') and st.session_state.get('dop_results'):
-                    satellites = st.session_state['satellites_dop']
+                if st.session_state.get(sat_dop_key) and st.session_state.get('dop_results'):
+                    satellites = st.session_state[sat_dop_key]
                     
                     if use_custom_location:
                         selected_location = None
@@ -1917,8 +1921,8 @@ if st.session_state.get('analysis_complete', False):
                 st.markdown("### 🗺️ Ground Traces")
                 
                 # Satellite bounding box plots
-                if st.session_state.get('satellites_dop') and st.session_state.get('current_time'):
-                    satellites = st.session_state['satellites_dop']
+                if st.session_state.get(sat_dop_key) and st.session_state.get('current_time'):
+                    satellites = st.session_state[sat_dop_key]
                     reference_time = st.session_state['current_time']
                     
                     plot_bounding_boxes(satellites, reference_time, location_points=LOCATION_POINTS)
