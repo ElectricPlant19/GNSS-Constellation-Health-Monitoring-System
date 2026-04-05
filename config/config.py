@@ -88,7 +88,7 @@ QZSS_SATS = {
 QZSS_SERVICE_REQUIREMENTS = {
     "QZS-1R (Michibiki-1R)": {
         "type": "IGSO",
-        "central_longitude_deg": 139.0, "longitude_tol_deg": 5.0,
+        "central_longitude_deg": 148.0, "longitude_tol_deg": 5.0,
         "inclination_target_deg_range": (39.0, 47.0),
         "arg_perigee_deg": 270.0, "arg_perigee_tol_deg": 1.0,
         "sma_km": 42164.0, "sma_tol_km": 10.0,
