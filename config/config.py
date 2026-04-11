@@ -6,7 +6,7 @@ Contains all constants, satellite data, and configuration parameters
 # Constants
 MU = 398600.4418  # km^3/s^2
 R_EARTH = 6371.0  # km
-GEOSYNC_MEAN_MOTION = 1.002737909  # revolutions/day for perfect geostationary orbit
+GEOSYNC_MEAN_MOTION = 1.00273790935  # revolutions/day for perfect geostationary orbit (= 86400 / 86164.09053)
 
 # Orbital altitude thresholds (km)
 GEO_NOMINAL_ALTITUDE = 35786.0  # Nominal GEO altitude (km)
@@ -206,8 +206,9 @@ BEIDOU3_MAINTENANCE_NOTE = "BeiDou-3 IGSO and GEO satellites provide regional co
 # Commissioning / active dates for satellites (use for analysis windows)
 # Dates should be YYYY-MM-DD. Add entries for recently commissioned satellites.
 COMMISSION_DATES = {
-    # Example: QZS-6 commissioned in Feb 2025 (update if you have exact date)
-    "QZS-6 (Michibiki-6)": "2025-02-01"
+    "QZS-6 (Michibiki-6)": "2025-02-01",
+    "NVS-01": "2023-12-18",
+    "IRNSS-1I": "2021-01-29",
 }
 
 # Space-Track API configuration

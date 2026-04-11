@@ -122,7 +122,9 @@ def analyze_maneuver_pattern(maneuver_events, observation_start, observation_end
         mean_interval = np.mean(intervals_days)
         std_interval = np.std(intervals_days)
         expected_interval_days = median_interval
-        if std_interval / mean_interval < 0.3:
+        if mean_interval == 0:
+            pattern_confidence = 'low'
+        elif std_interval / mean_interval < 0.3:
             pattern_confidence = 'high'
         elif std_interval / mean_interval < 0.6:
             pattern_confidence = 'medium'
@@ -257,9 +259,10 @@ def analyze_maneuver_pattern(maneuver_events, observation_start, observation_end
     }
 
 
-def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_tolerance, 
+def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_tolerance,
                                        min_man_per_month, max_man_per_month, uniformity_threshold,
-                                       drift_tolerance_gso=0.05, service_requirements=None,
+                                       drift_tolerance_gso=0.05, drift_tolerance_igso=2.0,
+                                       service_requirements=None,
                                        pattern_maneuvers=None, pattern_df=None):
     """
     Comprehensive health assessment for a satellite including drift analysis.
@@ -271,6 +274,12 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         pattern_maneuvers: Maneuvers from last year's data for pattern analysis (optional)
         pattern_df: Last year's dataframe for pattern analysis (optional)
     """
+    if sat_df is None or sat_df.empty:
+        return {
+            'Satellite': sat_name, 'Type': 'Unknown', 'Health Status': '⚪ No Data',
+            'Overall Score': 0.0, 'Remarks': 'No orbital data available for this satellite in the selected date range.'
+        }
+
     requirements_map = service_requirements if service_requirements is not None else NAVIK_SERVICE_REQUIREMENTS
     requirements = requirements_map.get(sat_name, {})
     
@@ -290,7 +299,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     std_inclination = sat_df['INCLINATION'].std()
 
     # Determine satellite type
-    if 0.0 < current_inclination < 10.0:
+    if 0.0 <= current_inclination < 10.0:
         sat_type = 'GEO'
     elif current_inclination >= 10.0:
         # Check if it's a QZSS satellite for specific QZO labeling
@@ -353,7 +362,11 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     try:
         comm_raw = COMMISSION_DATES.get(sat_name)
         if comm_raw is not None:
-            commission_date = pd.to_datetime(comm_raw)
+            cd = pd.to_datetime(comm_raw)
+            # Ensure timezone-naive so comparisons with GP history epochs don't fail
+            if cd.tzinfo is not None:
+                cd = cd.tz_localize(None)
+            commission_date = cd
     except Exception:
         commission_date = None
 
@@ -447,7 +460,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
                 stability_penalty = min(30, (drift_stability - 2) * 10)
                 drift_score = max(0, drift_score - stability_penalty)
         elif sat_type in ['IGSO', 'QZO']:
-            drift_stability = std_drift / 2.0
+            drift_stability = std_drift / drift_tolerance_igso
             if drift_stability > 1:
                 stability_penalty = min(20, (drift_stability - 1) * 10)
                 drift_score = max(0, drift_score - stability_penalty)
@@ -675,6 +688,10 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         'Type': sat_type,
         'Health Status': f"{status_color} {health_status}",
         'Overall Score': round(overall_score, 1),
+        '_inc_score': round(inc_score, 1) if inc_score is not None else None,
+        '_maintenance_score': round(float(maintenance_score), 1) if maintenance_score is not None else None,
+        '_uniformity_score': round(float(uniformity_score), 1) if uniformity_score is not None else None,
+        '_drift_score': round(float(drift_score), 1) if drift_score is not None else None,
         'Target Incl. (°)': target_inclination if target_inclination is not None else "N/A",
         'Incl. (°)': round(current_inclination, 3),
         'Incl. Dev. (°)': round(inc_deviation, 3) if inc_deviation is not None else "N/A",

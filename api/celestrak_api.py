@@ -78,7 +78,7 @@ def fetch_tles_from_celestrak(norad_ids, timeout=10):
                                 if norad in [int(n) for n in norad_ids]:
                                     tle_block = '\n'.join([lines[i].strip(), line1, lines[i + 2].strip()])
                                     all_tles.append(tle_block)
-                        except:
+                        except Exception:
                             continue
     except Exception:
         pass  # Fall back to individual requests

@@ -867,44 +867,87 @@ if st.session_state.get('analysis_complete', False):
                 # Fetch pattern data for all satellites with progress
                 pattern_data = {}
                 sat_list = [s for s, n in SAT_DICT.items() if n is not None]
-                progress_bar = st.progress(0, text="Fetching historical pattern data...")
-                
-                for idx, sat_name in enumerate(sat_list):
-                    norad = SAT_DICT[sat_name]
-                    progress_bar.progress((idx + 1) / len(sat_list), text=f"Analyzing {sat_name}...")
-                    try:
-                        if norad is None:
-                            continue
-                        pattern_df = fetch_and_classify_satellite(
-                            norad_id=int(norad),
-                            start_date=pattern_start_str,
-                            end_date=pattern_end_str,
-                            username=username,
-                            password=password,
-                            igso_min=10,
-                            deviation_tol=0.3
-                        )
-                        pattern_df['EPOCH'] = pd.to_datetime(pattern_df['EPOCH'])
-                        pattern_df = pattern_df.sort_values('EPOCH').reset_index(drop=True)
-                        
-                        # Detect maneuvers in pattern data
-                        pattern_detected = detect_navik_maneuvers(
-                            pattern_df,
-                            sma_col='SEMIMAJOR_AXIS',
-                            inc_col='INCLINATION',
-                            z_thresh=z_threshold,
-                            sma_abs_thresh_km=sma_threshold,
-                            inc_abs_thresh_deg=inc_threshold,
-                            persist_window=int(persist_window)
-                        )
-                        pattern_maneuvers = pattern_detected[pattern_detected['MANEUVER']].copy()
-                        pattern_data[sat_name] = {
-                            'df': pattern_df,
-                            'maneuvers': pattern_maneuvers
-                        }
-                    except Exception as e:
-                        pattern_data[sat_name] = None
-                
+                data_source = st.session_state.get('data_source', 'api')
+                progress_bar = st.progress(0, text="Loading historical pattern data...")
+
+                if data_source == 'bundled':
+                    # In bundled mode, extract pattern data from the already-loaded
+                    # df_all (bundled GP history) instead of calling the Space-Track API.
+                    # Filter the bundled data to the pattern analysis window.
+                    pattern_start_ts = pd.Timestamp(pattern_start_str)
+                    pattern_end_ts = pd.Timestamp(pattern_end_str)
+                    for idx, sat_name in enumerate(sat_list):
+                        progress_bar.progress((idx + 1) / len(sat_list), text=f"Analyzing {sat_name}...")
+                        try:
+                            sat_df = df_all[df_all['satellite'] == sat_name].copy()
+                            if sat_df.empty:
+                                pattern_data[sat_name] = None
+                                continue
+                            # Filter to pattern window (bundled data may span a wider or narrower range)
+                            pattern_df = sat_df[
+                                (sat_df['EPOCH'] >= pattern_start_ts) &
+                                (sat_df['EPOCH'] <= pattern_end_ts + pd.Timedelta(days=1))
+                            ].copy()
+                            if pattern_df.empty:
+                                # Fall back to all available bundled data for this satellite
+                                pattern_df = sat_df.copy()
+                            pattern_df = pattern_df.sort_values('EPOCH').reset_index(drop=True)
+
+                            # Detect maneuvers in pattern data
+                            pattern_detected = detect_navik_maneuvers(
+                                pattern_df,
+                                sma_col='SEMIMAJOR_AXIS',
+                                inc_col='INCLINATION',
+                                z_thresh=z_threshold,
+                                sma_abs_thresh_km=sma_threshold,
+                                inc_abs_thresh_deg=inc_threshold,
+                                persist_window=int(persist_window)
+                            )
+                            pattern_maneuvers = pattern_detected[pattern_detected['MANEUVER']].copy()
+                            pattern_data[sat_name] = {
+                                'df': pattern_df,
+                                'maneuvers': pattern_maneuvers
+                            }
+                        except Exception as e:
+                            pattern_data[sat_name] = None
+                else:
+                    # API mode: fetch pattern data from Space-Track
+                    for idx, sat_name in enumerate(sat_list):
+                        norad = SAT_DICT[sat_name]
+                        progress_bar.progress((idx + 1) / len(sat_list), text=f"Analyzing {sat_name}...")
+                        try:
+                            if norad is None:
+                                continue
+                            pattern_df = fetch_and_classify_satellite(
+                                norad_id=int(norad),
+                                start_date=pattern_start_str,
+                                end_date=pattern_end_str,
+                                username=username,
+                                password=password,
+                                igso_min=10,
+                                deviation_tol=0.3
+                            )
+                            pattern_df['EPOCH'] = pd.to_datetime(pattern_df['EPOCH'])
+                            pattern_df = pattern_df.sort_values('EPOCH').reset_index(drop=True)
+
+                            # Detect maneuvers in pattern data
+                            pattern_detected = detect_navik_maneuvers(
+                                pattern_df,
+                                sma_col='SEMIMAJOR_AXIS',
+                                inc_col='INCLINATION',
+                                z_thresh=z_threshold,
+                                sma_abs_thresh_km=sma_threshold,
+                                inc_abs_thresh_deg=inc_threshold,
+                                persist_window=int(persist_window)
+                            )
+                            pattern_maneuvers = pattern_detected[pattern_detected['MANEUVER']].copy()
+                            pattern_data[sat_name] = {
+                                'df': pattern_df,
+                                'maneuvers': pattern_maneuvers
+                            }
+                        except Exception as e:
+                            pattern_data[sat_name] = None
+
                 progress_bar.progress(1.0, text="Pattern analysis complete!")
                 # Determine days where the constellation appears fully deployed
                 # Count how many satellites have observations on each UTC date
@@ -1124,28 +1167,46 @@ if st.session_state.get('analysis_complete', False):
                             
                             health_df.at[idx, 'Lon Deviation Score'] = round(lon_score, 1)
 
-                            # Recalculate overall score now that longitude score is available.
-                            # The old overall_score encodes: weighted_sum_without_lon / old_total_weight
-                            # So: new_score = (old_score * old_total_weight + lon_score * 0.15)
-                            #                  / (old_total_weight + 0.15)
-                            # This is cache-safe: it only needs the already-stored Overall Score and
-                            # _score_total_weight (with 0.85 as a safe fallback when that field is absent).
-                            _old_tw = row.get('_score_total_weight')
-                            if _old_tw is None or (isinstance(_old_tw, float) and pd.isna(_old_tw)):
-                                _old_tw = 0.85  # fallback: all four non-longitude components present
-                            _old_tw = float(_old_tw)
-                            _old_score = float(row['Overall Score'])
-                            _new_score = round((_old_score * _old_tw + float(lon_score) * 0.15) / (_old_tw + 0.15), 1)
-                            health_df.at[idx, 'Overall Score'] = _new_score
+                            # Recalculate Overall Score to include the longitude component.
+                            # The health_assessment module computed overall_score over weights
+                            # summing to 0.85 (inc=0.30, maint=0.25, unif=0.10, drift=0.20) because
+                            # longitude was excluded there.  We now fold longitude (0.15) back in.
+                            #
+                            # Preferred path: use stored component scores to recompute from scratch.
+                            # Fallback path: blend the pre-existing 4-component score with longitude.
+                            #   new_score = original_score * 0.85 + lon_score * 0.15
+                            # (This is mathematically identical to the full recompute when all four
+                            # component weights sum to 0.85.)
+                            _weights = {'inc': 0.30, 'maintenance': 0.25, 'uniformity': 0.10,
+                                        'drift': 0.20, 'longitude': 0.15}
+                            _components = {}
+                            for _k, _col in [('inc', '_inc_score'), ('maintenance', '_maintenance_score'),
+                                             ('uniformity', '_uniformity_score'), ('drift', '_drift_score')]:
+                                _v = row.get(_col)
+                                if _v is not None and not (isinstance(_v, float) and np.isnan(_v)):
+                                    _components[_k] = float(_v)
 
-                            if _new_score >= 80:
-                                health_df.at[idx, 'Health Status'] = "🟢 Healthy"
-                            elif _new_score >= 60:
-                                health_df.at[idx, 'Health Status'] = "🟡 Fair"
-                            elif _new_score >= 40:
-                                health_df.at[idx, 'Health Status'] = "🟠 Degraded"
+                            _original_score = float(row['Overall Score'])
+                            if len(_components) >= 1:
+                                # Preferred: recompute using stored per-component scores
+                                _components['longitude'] = float(lon_score)
+                                _total_w = sum(_weights[k] for k in _components)
+                                _new_score = sum(_components[k] * _weights[k] for k in _components) / _total_w
                             else:
-                                health_df.at[idx, 'Health Status'] = "🔴 Critical"
+                                # Fallback: blend original 4-component score (normalised over 0.85)
+                                # with the new longitude component weight (0.15)
+                                _new_score = _original_score * 0.85 + float(lon_score) * 0.15
+
+                            health_df.at[idx, 'Overall Score'] = round(_new_score, 1)
+                            if _new_score >= 85:
+                                _hs, _sc = "Excellent", "🟢"
+                            elif _new_score >= 70:
+                                _hs, _sc = "Good", "🟡"
+                            elif _new_score >= 50:
+                                _hs, _sc = "Fair", "🟠"
+                            else:
+                                _hs, _sc = "Needs Attention", "🔴"
+                            health_df.at[idx, 'Health Status'] = f"{_sc} {_hs}"
 
                             # Append longitude remarks
                             current_remarks = health_df.at[idx, 'Remarks']

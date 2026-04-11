@@ -69,7 +69,6 @@ def assess_drift_health(drift_deg_per_day, sat_type, drift_tolerance_gso=0.05, d
             drift_color = "🔴"
     else:  # IGSO, QZO
         tolerance = drift_tolerance_igso
-        tolerance = drift_tolerance_igso
         if abs_drift <= tolerance:
             drift_score = 100
             drift_status = "Normal"
