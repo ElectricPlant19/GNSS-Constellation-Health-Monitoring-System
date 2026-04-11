@@ -1100,6 +1100,13 @@ if st.session_state.get('analysis_complete', False):
                 # Calculate mean longitude for each satellite over last 24 hours
                 total_sats_for_lon = len(health_df)
 
+                # Convert longitude columns from "N/A" strings to NaN so that
+                # assigning float values via .at[] works on all pandas versions.
+                # (Streamlit Cloud's pandas rejects float-into-str-column assignments.)
+                for _col in ['Current Mean Lon (°)', 'Lon Slot Deviation (°)', 'Lon Deviation Score']:
+                    if _col in health_df.columns:
+                        health_df[_col] = pd.to_numeric(health_df[_col], errors='coerce')
+
                 for idx, row in health_df.iterrows():
                     sat_name = row['Satellite']
                     designated_lon = row['Designated Lon (°)']
