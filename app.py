@@ -1230,13 +1230,13 @@ if st.session_state.get('analysis_complete', False):
                                 health_df.at[idx, 'Remarks'] = new_remark
                             
                         except Exception as e:
-                            # If calculation fails for this satellite, leave as N/A
-                            pass
+                            # Log per-satellite longitude errors so they're visible
+                            st.caption(f"⚠️ Longitude calculation failed for {sat_name}: {e}")
                 
                 lon_progress.progress(1.0, text="✅ Longitude deviation calculation complete!")
         except Exception as e:
             # If overall calculation fails, proceed without longitude data
-            st.warning(f"Could not calculate longitude deviations: {str(e)[:50]}")
+            st.warning(f"Could not calculate longitude deviations: {e}")
         
         
         # Health summary metrics
@@ -1264,19 +1264,19 @@ if st.session_state.get('analysis_complete', False):
         
         # Ensure required columns exist with default values
         required_cols = [
-            'Satellite', 'Type', 'Health Status', 'Overall Score', 
+            'Satellite', 'Type', 'Health Status', 'Overall Score',
             'Target Incl. (°)', 'Incl. (°)', 'Incl. Dev. (°)',
-            'Altitude (km)', 'Current Drift (°/day)', 
-            'Designated Lon (°)', 'Lon Slot Deviation (°)'
+            'Altitude (km)', 'Current Drift (°/day)',
+            'Designated Lon (°)', 'Current Mean Lon (°)', 'Lon Slot Deviation (°)'
         ]
-        
+
         for col in required_cols:
             if col not in health_df.columns:
                 health_df[col] = "N/A"
-        
+
         # Convert numeric columns that might have N/A to strings for safe display
         display_df = health_df[required_cols].copy()
-        for col in ['Designated Lon (°)', 'Lon Slot Deviation (°)']:
+        for col in ['Designated Lon (°)', 'Current Mean Lon (°)', 'Lon Slot Deviation (°)']:
             display_df[col] = display_df[col].astype(str)
         
         try:
