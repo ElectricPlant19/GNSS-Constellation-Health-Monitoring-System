@@ -436,7 +436,7 @@ use_bundled_data = st.sidebar.checkbox(
 
 # Show bundled data metadata if available
 if use_bundled_data:
-    constellation_key = constellation.lower()
+    constellation_key = constellation.lower().replace('-', '')
     gp_meta = get_gp_history_metadata(constellation_key)
     tle_meta = get_tle_metadata(constellation_key)
     
@@ -626,7 +626,7 @@ with col2:
 
 if run_analysis:
     # Check if bundled data mode is enabled
-    constellation_key = constellation.lower()
+    constellation_key = constellation.lower().replace('-', '')
     
     if use_bundled_data:
         # Try to load from bundled data first
@@ -1058,7 +1058,7 @@ if st.session_state.get('analysis_complete', False):
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
 
             # Use constellation-specific key to avoid cross-constellation cache pollution
-            constellation_key = constellation.lower()
+            constellation_key = constellation.lower().replace('-', '')
             sat_dop_key = f"satellites_dop_{constellation_key}"
 
             # Use existing satellites_dop if available, otherwise try bundled, then API
@@ -1659,7 +1659,7 @@ if st.session_state.get('analysis_complete', False):
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
             tle_data = None
             tle_source = "none"
-            constellation_key = constellation.lower()
+            constellation_key = constellation.lower().replace('-', '')
             sat_dop_key = f"satellites_dop_{constellation_key}"
 
             # Try bundled TLEs first if in offline mode
