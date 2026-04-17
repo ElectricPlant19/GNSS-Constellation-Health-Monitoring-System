@@ -372,11 +372,10 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("#### �️ Constellation")
 constellation = st.sidebar.selectbox(
     "Select constellation", 
-    ["NavIC", "QZSS"], 
+    ["NavIC", "QZSS", "BeiDou-3"], 
     index=0,
     help="Choose which satellite constellation to analyze"
 )
-st.sidebar.caption("🚀 BeiDou-3 support coming soon!")
 
 # Per-constellation configuration and info
 if constellation == "NavIC":

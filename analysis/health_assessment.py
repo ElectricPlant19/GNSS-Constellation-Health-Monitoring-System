@@ -288,11 +288,11 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     inc_range_bounds = None  # (low, high) for range-based requirements
     if "inclination" in requirements:
         target_inclination = requirements["inclination"]
-    elif "inclination_target_deg" in requirements:
-        target_inclination = requirements["inclination_target_deg"]
     elif "inclination_target_deg_range" in requirements:
         inc_range_bounds = requirements["inclination_target_deg_range"]
         target_inclination = (inc_range_bounds[0] + inc_range_bounds[1]) / 2.0
+    elif "inclination_target_deg" in requirements:
+        target_inclination = requirements["inclination_target_deg"]
 
     # Use instantaneous (latest) inclination for health assessment
     current_inclination = sat_df['INCLINATION'].iloc[-1]

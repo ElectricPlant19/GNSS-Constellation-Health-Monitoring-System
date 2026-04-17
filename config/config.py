@@ -131,71 +131,162 @@ QZSS_MAINTENANCE_NOTE = "Orbit correction maneuvers occur roughly once every six
 
 # BeiDou-3 Satellite NORAD IDs (IGSO and GEO satellites only)
 # Note: NORAD IDs need to be filled in with actual values from Space-Track
-BEIDOU3_SATS = {
-    # Only include BeiDou-3 (BDS-3) satellites — remove BeiDou-1/2 (Compass) entries
-    # GEO Satellites (BeiDou-3)
-    "BeiDou-3 G1": 43683,      # BEIDOU-3 G1 (GEO)
-    "BeiDou-3 G2": 45344,      # BEIDOU-3 G2 (GEO)
-    "BeiDou-3 G3": 45807,      # BEIDOU-3 G3 (GEO)
-    "BeiDou-3 G4": 56564,      # BEIDOU-3 G4 (GEO; launched 2023)
+# BEIDOU3_SATS = {
+#     # Only include BeiDou-3 (BDS-3) satellites — remove BeiDou-1/2 (Compass) entries
+#     # GEO Satellites (BeiDou-3)
+#     "BeiDou-3 G1": 43683,      # BEIDOU-3 G1 (GEO)
+#     "BeiDou-3 G2": 45344,      # BEIDOU-3 G2 (GEO)
+#     "BeiDou-3 G3": 45807,      # BEIDOU-3 G3 (GEO)
+#     "BeiDou-3 G4": 56564,      # BEIDOU-3 G4 (GEO; launched 2023)
 
-    # IGSO Satellites (BeiDou-3)
-    "BeiDou-3 I1": 44204,      # BEIDOU-3 IGSO-1
-    "BeiDou-3 I2": 44337,      # BEIDOU-3 IGSO-2
-    "BeiDou-3 I3": 44709,      # BEIDOU-3 IGSO-3
+#     # IGSO Satellites (BeiDou-3)
+#     "BeiDou-3 I1": 44204,      # BEIDOU-3 IGSO-1
+#     "BeiDou-3 I2": 44337,      # BEIDOU-3 IGSO-2
+#     "BeiDou-3 I3": 44709,      # BEIDOU-3 IGSO-3
+# }
+
+
+# BEIDOU3_SERVICE_REQUIREMENTS = {
+#     # Service requirements for BeiDou-3 satellites only
+#     "BeiDou-3 I1": {
+#         "type": "IGSO",
+#         "central_longitude_deg": 120.0, "longitude_tol_deg": 5.0,
+#         "inclination_target_deg": 55.0, "inclination_tol_deg": 1.0,
+#         "sma_km": 42164.0, "sma_tol_km": 10.0,
+#         "ecc_max": 0.05
+#     },
+#     "BeiDou-3 I2": {
+#         "type": "IGSO",
+#         "central_longitude_deg": 120.0, "longitude_tol_deg": 5.0,
+#         "inclination_target_deg": 55.0, "inclination_tol_deg": 1.0,
+#         "sma_km": 42164.0, "sma_tol_km": 10.0,
+#         "ecc_max": 0.05
+#     },
+#     "BeiDou-3 I3": {
+#         "type": "IGSO",
+#         "central_longitude_deg": 120.0, "longitude_tol_deg": 5.0,
+#         "inclination_target_deg": 55.0, "inclination_tol_deg": 1.0,
+#         "sma_km": 42164.0, "sma_tol_km": 10.0,
+#         "ecc_max": 0.05
+#     },
+#     # GEO satellites
+#     "BeiDou-3 G1": {
+#         "type": "GEO",
+#         "central_longitude_deg": 144.2, "longitude_tol_deg": 0.5,
+#         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
+#         "sma_km": 42164.0, "sma_tol_km": 10.0,
+#         "ecc_max": 0.05
+#     },
+#     "BeiDou-3 G2": {
+#         "type": "GEO",
+#         "central_longitude_deg": 80.0, "longitude_tol_deg": 0.5,
+#         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
+#         "sma_km": 42164.0, "sma_tol_km": 10.0,
+#         "ecc_max": 0.05
+#     },
+#     "BeiDou-3 G3": {
+#         "type": "GEO",
+#         "central_longitude_deg": 110.5, "longitude_tol_deg": 0.5,
+#         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
+#         "sma_km": 42164.0, "sma_tol_km": 10.0,
+#         "ecc_max": 0.05
+#     },
+#     "BeiDou-3 G4": {
+#         "type": "GEO",
+#         "central_longitude_deg": 160.0, "longitude_tol_deg": 0.5,
+#         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
+#         "sma_km": 42164.0, "sma_tol_km": 10.0,
+#         "ecc_max": 0.05
+#     }
+# }
+
+
+BEIDOU3_SATS = {
+    "BeiDou-3 G1": 43683,
+    "BeiDou-3 G2": 45344,
+    "BeiDou-3 G3": 45807,
+    "BeiDou-3 G4": 56564,
+    "BeiDou-3 I1": 44204,
+    "BeiDou-3 I2": 44337,
+    "BeiDou-3 I3": 44709,
 }
 
-
 BEIDOU3_SERVICE_REQUIREMENTS = {
-    # Service requirements for BeiDou-3 satellites only
     "BeiDou-3 I1": {
         "type": "IGSO",
-        "central_longitude_deg": 120.0, "longitude_tol_deg": 5.0,
-        "inclination_target_deg": 55.0, "inclination_tol_deg": 1.0,
-        "sma_km": 42164.0, "sma_tol_km": 10.0,
+        "central_longitude_deg": 118.0,
+        "longitude_tol_deg": 5.0,
+        "inclination_target_deg": 55.0,
+        "inclination_target_deg_range": (52.0, 58.0),
+        "inclination_tol_deg": 3.0,
+        "sma_km": 42164.0,
+        "sma_tol_km": 10.0,
         "ecc_max": 0.05
     },
     "BeiDou-3 I2": {
         "type": "IGSO",
-        "central_longitude_deg": 120.0, "longitude_tol_deg": 5.0,
-        "inclination_target_deg": 55.0, "inclination_tol_deg": 1.0,
-        "sma_km": 42164.0, "sma_tol_km": 10.0,
+        "central_longitude_deg": 118.0,
+        "longitude_tol_deg": 5.0,
+        "inclination_target_deg": 55.0,
+        "inclination_target_deg_range": (52.0, 58.0),
+        "inclination_tol_deg": 3.0,
+        "sma_km": 42164.0,
+        "sma_tol_km": 10.0,
         "ecc_max": 0.05
     },
     "BeiDou-3 I3": {
         "type": "IGSO",
-        "central_longitude_deg": 120.0, "longitude_tol_deg": 5.0,
-        "inclination_target_deg": 55.0, "inclination_tol_deg": 1.0,
-        "sma_km": 42164.0, "sma_tol_km": 10.0,
+        "central_longitude_deg": 118.0,
+        "longitude_tol_deg": 5.0,
+        "inclination_target_deg": 55.0,
+        "inclination_target_deg_range": (52.0, 58.0),
+        "inclination_tol_deg": 3.0,
+        "sma_km": 42164.0,
+        "sma_tol_km": 10.0,
         "ecc_max": 0.05
     },
-    # GEO satellites
     "BeiDou-3 G1": {
         "type": "GEO",
-        "central_longitude_deg": 144.2, "longitude_tol_deg": 0.5,
-        "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
-        "sma_km": 42164.0, "sma_tol_km": 10.0,
+        "central_longitude_deg": 140.0,
+        "longitude_tol_deg": 0.5,
+        "inclination_target_deg": 0.0,
+        "inclination_target_deg_range": (-3.0, 3.0),
+        "inclination_tol_deg": 3.0,
+        "sma_km": 42164.0,
+        "sma_tol_km": 10.0,
         "ecc_max": 0.05
     },
     "BeiDou-3 G2": {
         "type": "GEO",
-        "central_longitude_deg": 80.0, "longitude_tol_deg": 0.5,
-        "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
-        "sma_km": 42164.0, "sma_tol_km": 10.0,
+        "central_longitude_deg": 80.0,
+        "longitude_tol_deg": 0.5,
+        "inclination_target_deg": 0.0,
+        "inclination_target_deg_range": (-3.0, 3.0),
+        "inclination_tol_deg": 3.0,
+        "sma_km": 42164.0,
+        "sma_tol_km": 10.0,
         "ecc_max": 0.05
     },
     "BeiDou-3 G3": {
         "type": "GEO",
-        "central_longitude_deg": 110.5, "longitude_tol_deg": 0.5,
-        "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
-        "sma_km": 42164.0, "sma_tol_km": 10.0,
+        "central_longitude_deg": 110.5,
+        "longitude_tol_deg": 0.5,
+        "inclination_target_deg": 0.0,
+        "inclination_target_deg_range": (-3.0, 3.0),
+        "inclination_tol_deg": 3.0,
+        "sma_km": 42164.0,
+        "sma_tol_km": 10.0,
         "ecc_max": 0.05
     },
     "BeiDou-3 G4": {
         "type": "GEO",
-        "central_longitude_deg": 160.0, "longitude_tol_deg": 0.5,
-        "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
-        "sma_km": 42164.0, "sma_tol_km": 10.0,
+        "central_longitude_deg": 160.0,
+        "longitude_tol_deg": 0.5,
+        "inclination_target_deg": 0.0,
+        "inclination_target_deg_range": (-3.0, 3.0),
+        "inclination_tol_deg": 3.0,
+        "sma_km": 42164.0,
+        "sma_tol_km": 10.0,
         "ecc_max": 0.05
     }
 }
