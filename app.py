@@ -640,8 +640,9 @@ if run_analysis:
             if not all_dfs:
                 st.error("❌ Bundled data could not be loaded. Try disabling bundled mode.")
             else:
-                df_all = pd.concat(all_dfs, ignore_index=True, sort=False)
-                
+                df_all_full = pd.concat(all_dfs, ignore_index=True, sort=False)
+                df_all = df_all_full.copy()
+
                 # Filter by user's selected date range
                 bundled_start = df_all['EPOCH'].min()
                 bundled_end = df_all['EPOCH'].max()
@@ -681,6 +682,9 @@ if run_analysis:
                     
                     # Store in session state
                     st.session_state['df_all'] = df_all
+                    # Preserve the unfiltered bundled dataset so pattern analysis (365-day
+                    # window) can use it even when the user picks a shorter display range.
+                    st.session_state['df_all_full_bundled'] = df_all_full
                     st.session_state['analysis_complete'] = True
                     st.session_state['errors'] = errors
                     st.session_state['graveyard_sats'] = graveyard_sats
@@ -870,15 +874,18 @@ if st.session_state.get('analysis_complete', False):
                 progress_bar = st.progress(0, text="Loading historical pattern data...")
 
                 if data_source == 'bundled':
-                    # In bundled mode, extract pattern data from the already-loaded
-                    # df_all (bundled GP history) instead of calling the Space-Track API.
-                    # Filter the bundled data to the pattern analysis window.
+                    # In bundled mode, extract pattern data from the UNFILTERED bundled
+                    # dataset so pattern analysis gets the full 365-day window even when
+                    # the user's display range is shorter. Without this, bundled-mode
+                    # health scores diverge from API-mode because the pattern window
+                    # silently collapses to the user's selected range.
+                    df_all_full_bundled = st.session_state.get('df_all_full_bundled', df_all)
                     pattern_start_ts = pd.Timestamp(pattern_start_str)
                     pattern_end_ts = pd.Timestamp(pattern_end_str)
                     for idx, sat_name in enumerate(sat_list):
                         progress_bar.progress((idx + 1) / len(sat_list), text=f"Analyzing {sat_name}...")
                         try:
-                            sat_df = df_all[df_all['satellite'] == sat_name].copy()
+                            sat_df = df_all_full_bundled[df_all_full_bundled['satellite'] == sat_name].copy()
                             if sat_df.empty:
                                 pattern_data[sat_name] = None
                                 continue
