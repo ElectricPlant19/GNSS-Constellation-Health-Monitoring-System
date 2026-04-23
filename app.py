@@ -10,7 +10,7 @@ from skyfield.api import load
 
 # Import our modular components
 from config.config import (
-    NAVIK_SATS, INDIA_EXTREME_POINTS, JAPAN_KEY_POINTS, CHINA_KEY_POINTS, INACTIVE_SATELLITES, DEFAULT_PARAMS,
+    NAVIK_SATS, NAVIK_SERVICE_REQUIREMENTS, INDIA_EXTREME_POINTS, JAPAN_KEY_POINTS, CHINA_KEY_POINTS, INACTIVE_SATELLITES, DEFAULT_PARAMS,
     QZSS_SATS, QZSS_SERVICE_REQUIREMENTS,
     BEIDOU3_SATS, BEIDOU3_SERVICE_REQUIREMENTS,
     GRAVEYARD_ORBIT_MIN, GEO_NOMINAL_ALTITUDE, GEO_ALTITUDE_TOLERANCE
@@ -21,6 +21,7 @@ from analysis.drift_analysis import assess_drift_health, get_drift_direction
 from analysis.maneuver_detection import detect_navik_maneuvers
 from analysis.health_assessment import assess_satellite_health_with_drift
 from analysis.dop_calculations import parse_tle_data, calculate_dop_for_location, get_dop_quality
+from analysis.raan_analysis import analyze_raan_spacing
 from data.tle_cache import (
     load_bundled_tles, load_bundled_gp_history, get_tle_metadata, 
     get_gp_history_metadata, format_timestamp_for_display
@@ -29,7 +30,8 @@ from visualizations.visualization import (
     plot_individual_satellites, plot_combined_drift, plot_bounding_boxes,
     plot_sky_plot, plot_animated_sky_plot, plot_dop_over_time, plot_combined_inclination,
     plot_combined_altitude, plot_drift_distribution, plot_drift_vs_altitude,
-    plot_constellation_coverage, plot_mean_longitude_map, plot_historical_central_longitude
+    plot_constellation_coverage, plot_mean_longitude_map, plot_historical_central_longitude,
+    plot_raan_spacing_3d
 )
 
 # Initialize timescale globally
@@ -829,7 +831,7 @@ if st.session_state.get('analysis_complete', False):
     st.markdown("---")
     
     # Tab-based navigation for main content
-    tab1, tab2, tab3, tab4 = st.tabs(["🏥 Health Overview", "📊 Drift & Maneuvers", "📡 DOP Analysis", "📈 Visualizations"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏥 Health Overview", "📊 Drift & Maneuvers", "📡 DOP Analysis", "📈 Visualizations", "🧭 RAAN Spacing"])
     
     # ==================== TAB 1: HEALTH OVERVIEW ====================
     with tab1:
@@ -1211,14 +1213,14 @@ if st.session_state.get('analysis_complete', False):
                                 _new_score = _original_score * 0.85 + float(lon_score) * 0.15
 
                             health_df.at[idx, 'Overall Score'] = round(_new_score, 1)
-                            if _new_score >= 85:
-                                _hs, _sc = "Excellent", "🟢"
-                            elif _new_score >= 70:
-                                _hs, _sc = "Good", "🟡"
-                            elif _new_score >= 50:
-                                _hs, _sc = "Fair", "🟠"
+                            if _new_score >= 80:
+                                _hs, _sc = "Healthy", "🟢"
+                            elif _new_score >= 60:
+                                _hs, _sc = "Fair", "🟡"
+                            elif _new_score >= 40:
+                                _hs, _sc = "Degraded", "🟠"
                             else:
-                                _hs, _sc = "Needs Attention", "🔴"
+                                _hs, _sc = "Critical", "🔴"
                             health_df.at[idx, 'Health Status'] = f"{_sc} {_hs}"
 
                             # Append longitude remarks
@@ -2003,11 +2005,142 @@ if st.session_state.get('analysis_complete', False):
                 else:
                     st.info("💡 Run DOP analysis to generate 3D coverage plots")
             
-            if viz_progress: 
+            if viz_progress:
                 viz_progress.progress(1.0, text="Visualizations generated!")
                 # Optional: Remove progress bar after a short delay or leave it at 100%
-                # st.empty() would remove it, but might cause layout shift. 
+                # st.empty() would remove it, but might cause layout shift.
                 # Leaving it at 100% is often nicer UX than disappearance.
+
+    # ==================== TAB 5: RAAN SPACING (IGSO co-located groups) ====================
+    with tab5:
+        st.markdown("## 🧭 IGSO RAAN Spacing")
+        st.caption(
+            "Co-located IGSO satellites sharing a central longitude are designed to "
+            "sit on equally spaced RAAN values (N satellites → 360°/N apart). "
+            "Deviation from equal spacing reduces geometric diversity and can "
+            "degrade DOP. This view is informational and does not feed the health score."
+        )
+
+        if constellation == "NavIC":
+            raan_reqs = NAVIK_SERVICE_REQUIREMENTS
+        elif constellation == "QZSS":
+            raan_reqs = QZSS_SERVICE_REQUIREMENTS
+        else:
+            raan_reqs = BEIDOU3_SERVICE_REQUIREMENTS
+
+        try:
+            raan_constellation_key = constellation.lower().replace('-', '')
+            raan_sat_dop_key = f"satellites_dop_{raan_constellation_key}"
+            satellites_for_raan = st.session_state.get(raan_sat_dop_key)
+
+            # If DOP tab hasn't populated session state yet, load TLEs independently
+            if not satellites_for_raan:
+                bundled_tles = load_bundled_tles(raan_constellation_key)
+                tle_data = None
+                if bundled_tles and bundled_tles.get('tle_data'):
+                    tle_data = bundled_tles['tle_data']
+                    st.caption(
+                        f"📦 Using bundled TLEs from "
+                        f"{format_timestamp_for_display(bundled_tles.get('timestamp', ''))}"
+                    )
+                elif not use_bundled_data:
+                    norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
+                    tle_data, tle_source = fetch_tles_with_fallback(
+                        norad_ids, username, password, timeout=10
+                    )
+                if tle_data:
+                    satellites_for_raan = parse_tle_data(tle_data, SAT_DICT)
+                    st.session_state[raan_sat_dop_key] = satellites_for_raan
+
+            if not satellites_for_raan:
+                st.warning(
+                    "⚠️ No TLE data available for RAAN analysis. "
+                    "Open the DOP Analysis tab first, or ensure bundled TLEs are present."
+                )
+            else:
+                groups = analyze_raan_spacing(satellites_for_raan, raan_reqs)
+
+                if not groups:
+                    st.info(
+                        "No co-located IGSO clusters found for this constellation. "
+                        "RAAN spacing only applies when two or more IGSO satellites "
+                        "share a central longitude."
+                    )
+                else:
+                    st.markdown(
+                        f"Found **{len(groups)}** co-located IGSO cluster"
+                        f"{'s' if len(groups) != 1 else ''}."
+                    )
+
+                    status_colors = {
+                        "Ideal": "🟢",
+                        "Good": "🟢",
+                        "Moderate": "🟡",
+                        "Poor": "🔴",
+                        "N/A": "⚪",
+                    }
+
+                    for g in groups:
+                        icon = status_colors.get(g["status"], "⚪")
+                        st.markdown(
+                            f"### {icon} Central longitude {g['central_longitude_deg']}° "
+                            f"— {g['satellite_count']} satellites"
+                        )
+
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("Ideal spacing", f"{g['ideal_spacing_deg']}°")
+                        c2.metric("Max deviation", f"{g['max_deviation_deg']}°")
+                        c3.metric("RMS deviation", f"{g['rms_deviation_deg']}°")
+                        c4.metric("Status", g["status"])
+
+                        sat_rows = []
+                        for s in g["satellites"]:
+                            sat_rows.append({
+                                "Satellite": s["name"],
+                                "Central lon (°)": s.get("central_longitude_deg"),
+                                "RAAN (°)": s["raan_deg"],
+                                "Next neighbour": s["next_neighbor"],
+                                "Gap to next (°)": s["gap_to_next_deg"],
+                                "Δ from ideal (°)": s["deviation_from_ideal_deg"],
+                            })
+                        st.dataframe(
+                            pd.DataFrame(sat_rows),
+                            hide_index=True,
+                            width='stretch',
+                        )
+
+                        with st.expander("🛰️ 3D orbit geometry", expanded=False):
+                            try:
+                                fig3d = plot_raan_spacing_3d(g, satellites_for_raan)
+                                st.plotly_chart(fig3d, use_container_width=True)
+                            except Exception as viz_err:
+                                st.warning(f"Could not render 3D geometry: {viz_err}")
+
+                    with st.expander("ℹ️ How to read this", expanded=False):
+                        st.markdown(
+                            "- **RAAN** (Right Ascension of the Ascending Node) is "
+                            "taken from the latest available TLE for each satellite.\n"
+                            "- **Central lon** is the circular mean of the sub-satellite "
+                            "longitude over one sidereal day — for a GEO it is the "
+                            "station-keeping longitude, for an IGSO it is the centre "
+                            "of the figure-8 ground track.\n"
+                            "- Satellites are grouped when their ground-track central "
+                            "longitudes fall within 5° of each other (chained, so 117°, "
+                            "119°, 121° end up in one cluster).\n"
+                            "- IGSO membership is determined from TLE inclination "
+                            "(≥20°); near-equatorial GEO satellites are excluded from "
+                            "this view.\n"
+                            "- For a cluster of *N* satellites the ideal gap between "
+                            "consecutive RAAN values (sorted ascending, wrap-around) "
+                            "is 360°/*N*.\n"
+                            "- **Δ from ideal** is the signed difference between the "
+                            "gap to the next neighbour and the ideal gap. Positive "
+                            "means a wider-than-ideal gap, negative means narrower.\n"
+                            "- Status is a rough rating of max |Δ| relative to the "
+                            "ideal gap: Ideal <5%, Good <15%, Moderate <30%, Poor ≥30%."
+                        )
+        except Exception as e:
+            st.error(f"❌ Error during RAAN spacing analysis: {str(e)}")
 
 
 else:

@@ -2156,11 +2156,165 @@ def plot_mean_longitude_map(satellites, reference_time, timestep_minutes=15, sys
         
         # Add explanation
         st.caption("""
-        **Legend:** 
-        - 🟢 Green: Deviation ≤ 0.5° (Good) 
+        **Legend:**
+        - 🟢 Green: Deviation ≤ 0.5° (Good)
         - 🟡 Yellow: Deviation 0.5° - 1.0° (Acceptable)
         - 🔴 Red: Deviation > 1.0° (Needs Attention)
-        
+
         *Solid lines show current mean longitude. Light dashed lines show designated longitude slots.*
         """)
+
+
+def plot_raan_spacing_3d(cluster, satellites_dict, ts=None):
+    """Build a 3D Plotly figure that visualises RAAN spacing for one cluster.
+
+    The figure shows Earth, the equatorial RAAN reference ring at GSO radius,
+    one propagated orbit per satellite (one sidereal day of ICRS positions),
+    an ascending-node marker per satellite on the equatorial ring, and a set
+    of hollow grey reference markers at the ideally spaced RAANs so that the
+    deviation from equal spacing is visually obvious.
+
+    Args:
+        cluster: one group dict returned by ``analyze_raan_spacing``.
+        satellites_dict: ``{name: Skyfield EarthSatellite}`` as produced by
+            ``analysis.dop_calculations.parse_tle_data``.
+        ts: optional Skyfield timescale (for tests).
+
+    Returns:
+        A ``plotly.graph_objects.Figure`` ready for ``st.plotly_chart``.
+    """
+    import math
+    from datetime import datetime, timedelta, timezone
+
+    import numpy as np
+
+    from analysis.raan_analysis import _get_timescale
+    from config.config import R_EARTH, GEO_NOMINAL_ALTITUDE
+
+    ts = ts or _get_timescale()
+    gso_radius_km = R_EARTH + GEO_NOMINAL_ALTITUDE  # 42157 km, close enough
+
+    palette = px.colors.qualitative.Bold
+    fig = go.Figure()
+
+    # 1) Earth sphere
+    u = np.linspace(0, 2 * np.pi, 48)
+    v = np.linspace(0, np.pi, 24)
+    ex = R_EARTH * np.outer(np.cos(u), np.sin(v))
+    ey = R_EARTH * np.outer(np.sin(u), np.sin(v))
+    ez = R_EARTH * np.outer(np.ones_like(u), np.cos(v))
+    fig.add_trace(go.Surface(
+        x=ex, y=ey, z=ez,
+        colorscale=[[0, "rgb(180,215,255)"], [1, "rgb(90,140,200)"]],
+        showscale=False, opacity=0.9, hoverinfo="skip",
+        name="Earth", showlegend=False,
+    ))
+
+    # 2) Equatorial RAAN reference ring at GSO radius
+    ring_phi = np.linspace(0, 2 * np.pi, 181)
+    fig.add_trace(go.Scatter3d(
+        x=gso_radius_km * np.cos(ring_phi),
+        y=gso_radius_km * np.sin(ring_phi),
+        z=np.zeros_like(ring_phi),
+        mode="lines",
+        line=dict(color="rgba(150,150,150,0.6)", width=2, dash="dot"),
+        name="Equatorial RAAN ring", hoverinfo="skip",
+    ))
+
+    # 3) + 4) Orbit traces and ascending-node markers
+    t0 = datetime.now(timezone.utc)
+    samples = 96
+    duration_hours = 23.9344696  # one sidereal day
+    times = [t0 + timedelta(hours=duration_hours * i / samples)
+             for i in range(samples + 1)]
+    t_sf = ts.utc(
+        [t.year for t in times], [t.month for t in times], [t.day for t in times],
+        [t.hour for t in times], [t.minute for t in times],
+        [t.second + t.microsecond * 1e-6 for t in times],
+    )
+
+    for idx, sat in enumerate(cluster.get("satellites", [])):
+        name = sat["name"]
+        raan_deg = sat["raan_deg"]
+        colour = palette[idx % len(palette)]
+        sat_obj = satellites_dict.get(name)
+        if sat_obj is None:
+            continue
+
+        try:
+            pos_km = sat_obj.at(t_sf).position.km  # shape (3, N) in ICRS
+            fig.add_trace(go.Scatter3d(
+                x=pos_km[0], y=pos_km[1], z=pos_km[2],
+                mode="lines",
+                line=dict(color=colour, width=4),
+                name=f"{name} orbit",
+                hovertemplate=f"{name}<br>RAAN {raan_deg:.2f}°<extra></extra>",
+            ))
+        except Exception:
+            pass
+
+        raan_rad = math.radians(raan_deg)
+        an_x = gso_radius_km * math.cos(raan_rad)
+        an_y = gso_radius_km * math.sin(raan_rad)
+        fig.add_trace(go.Scatter3d(
+            x=[an_x], y=[an_y], z=[0],
+            mode="markers+text",
+            marker=dict(size=6, color=colour, symbol="circle"),
+            text=[f"{name}<br>{raan_deg:.1f}°"],
+            textposition="top center",
+            textfont=dict(size=10, color=colour),
+            name=f"{name} AN",
+            hovertemplate=f"{name} ascending node<br>RAAN {raan_deg:.2f}°<extra></extra>",
+            showlegend=False,
+        ))
+
+    # 5) Ideal-spacing reference markers (hollow grey)
+    sats = cluster.get("satellites", [])
+    n = len(sats)
+    if n >= 2:
+        raan0_deg = sats[0]["raan_deg"]
+        ideal_spacing = cluster.get("ideal_spacing_deg", 360.0 / n)
+        for k in range(n):
+            a_deg = (raan0_deg + k * ideal_spacing) % 360.0
+            a_rad = math.radians(a_deg)
+            ix = gso_radius_km * math.cos(a_rad)
+            iy = gso_radius_km * math.sin(a_rad)
+            fig.add_trace(go.Scatter3d(
+                x=[0, ix], y=[0, iy], z=[0, 0],
+                mode="lines",
+                line=dict(color="rgba(120,120,120,0.55)", width=2, dash="dash"),
+                hoverinfo="skip",
+                showlegend=(k == 0),
+                name="Ideal RAAN" if k == 0 else None,
+            ))
+            fig.add_trace(go.Scatter3d(
+                x=[ix], y=[iy], z=[0],
+                mode="markers",
+                marker=dict(
+                    size=8, color="rgba(0,0,0,0)",
+                    line=dict(color="rgba(120,120,120,0.9)", width=2),
+                ),
+                hovertemplate=f"Ideal RAAN {a_deg:.2f}°<extra></extra>",
+                showlegend=False,
+            ))
+
+    status = cluster.get("status", "")
+    central_lon = cluster.get("central_longitude_deg", 0.0)
+    ideal = cluster.get("ideal_spacing_deg", 0.0)
+    fig.update_layout(
+        title=(f"Cluster @ {central_lon:.1f}°E — "
+               f"ideal spacing {ideal:.0f}°, status {status}"),
+        scene=dict(
+            xaxis_title="X (km, vernal equinox)",
+            yaxis_title="Y (km)",
+            zaxis_title="Z (km, North)",
+            aspectmode="data",
+            camera=dict(eye=dict(x=1.6, y=1.6, z=0.9)),
+        ),
+        margin=dict(l=0, r=0, t=40, b=0),
+        height=560,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.05,
+                    xanchor="center", x=0.5),
+    )
+    return fig
 
