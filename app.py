@@ -37,6 +37,25 @@ from visualizations.visualization import (
 # Initialize timescale globally
 ts = load.timescale()
 
+FEEDBACK_FORM_URL = "https://forms.gle/AgaCbH9ac7yHqznm8"
+
+
+def render_feedback_panel():
+    st.markdown(
+        f"""
+        <div class="info-card">
+            <h4>💬 Feedback</h4>
+            <p>Have a bug report, feature idea, or note about the data? Send it through the project feedback form.</p>
+            <p style="margin-bottom: 0.75rem;">Responses go to a shared Google Sheet so the project can be reviewed and improved.</p>
+            <a href="{FEEDBACK_FORM_URL}" target="_blank" rel="noopener noreferrer"
+               style="display:inline-block;padding:0.65rem 1rem;border-radius:8px;background:#3b82f6;color:white;text-decoration:none;font-weight:600;">
+               Open feedback form
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 def get_graveyard_satellites(df_all):
     """
@@ -2142,6 +2161,9 @@ if st.session_state.get('analysis_complete', False):
         except Exception as e:
             st.error(f"❌ Error during RAAN spacing analysis: {str(e)}")
 
+        st.markdown("---")
+        render_feedback_panel()
+
 
 else:
     # Welcome message when no analysis has been run
@@ -2191,3 +2213,5 @@ else:
         </ol>
     </div>
     """, unsafe_allow_html=True)
+
+    render_feedback_panel()
