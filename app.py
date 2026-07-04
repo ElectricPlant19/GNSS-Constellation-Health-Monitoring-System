@@ -1057,6 +1057,7 @@ if st.session_state.get('analysis_complete', False):
                         inclination_tolerance, min_maneuvers_per_month,
                         max_maneuvers_per_month, maneuver_uniformity_threshold,
                         drift_tolerance_gso, service_requirements=SERVICE_REQS,
+                        constellation_name=constellation,
                         pattern_maneuvers=health_maneuvers,
                         pattern_df=health_sat_df
                     )

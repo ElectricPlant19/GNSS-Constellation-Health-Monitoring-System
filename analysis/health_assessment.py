@@ -6,7 +6,7 @@ Comprehensive health assessment for NavIC satellites including drift analysis
 import numpy as np
 import pandas as pd
 from datetime import timedelta
-from config.config import NAVIK_SERVICE_REQUIREMENTS, COMMISSION_DATES
+from config.config import NAVIK_SERVICE_REQUIREMENTS, QZSS_SERVICE_REQUIREMENTS, COMMISSION_DATES
 from analysis.drift_analysis import assess_drift_health, calculate_drift_trend
 from analysis.maneuver_detection import calculate_maneuver_uniformity
 
@@ -263,6 +263,7 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
                                        min_man_per_month, max_man_per_month, uniformity_threshold,
                                        drift_tolerance_gso=0.05, drift_tolerance_igso=2.0,
                                        service_requirements=None,
+                                       constellation_name=None,
                                        pattern_maneuvers=None, pattern_df=None):
     """
     Comprehensive health assessment for a satellite including drift analysis.
@@ -302,13 +303,9 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     if 0.0 <= current_inclination < 10.0:
         sat_type = 'GEO'
     elif current_inclination >= 10.0:
-        # Check if it's a QZSS satellite for specific QZO labeling
-        is_qzss_system = service_requirements is not None and requirements.get('type') in ['IGSO', 'GEO']
-        # If explicitly identified as QZSS or if we can infer it (though is_qzss flag is better)
-        if is_qzss_system:
-             sat_type = 'QZO'
-        else:
-             sat_type = 'IGSO'
+        # QZO is reserved for QZSS; NavIC and BeiDou IGSO satellites stay labeled IGSO.
+        is_qzss_system = constellation_name == 'QZSS' or service_requirements == QZSS_SERVICE_REQUIREMENTS
+        sat_type = 'QZO' if is_qzss_system else 'IGSO'
     else:
         sat_type = 'Unclassified'
 
@@ -319,9 +316,6 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
 
     num_maneuvers = len(maneuver_events)
     maneuvers_per_month = num_maneuvers / observation_months if observation_months > 0 else 0
-
-    # Detect if this is QZSS (service_requirements is not None and not NavIC)
-    is_qzss = service_requirements is not None and requirements.get('type') in ['IGSO', 'GEO']
 
     # Inclination score with stability consideration
     if target_inclination is not None:
