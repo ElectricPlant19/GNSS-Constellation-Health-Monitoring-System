@@ -417,12 +417,16 @@ elif constellation == "QZSS":
     include_inactive_sats = False
     st.sidebar.info("🇯🇵 **QZSS (Michibiki)**: 5 satellites with orbit corrections ~every 6 months")
 else:  # BeiDou-3
+    from config.config import BEIDOU3_SLOT_SWAP_NOTE
     SAT_DICT = BEIDOU3_SATS
     SERVICE_REQS = BEIDOU3_SERVICE_REQUIREMENTS
     system_label = "BeiDou-3"
     LOCATION_POINTS = CHINA_KEY_POINTS
     include_inactive_sats = False
     st.sidebar.info("🇨🇳 **BeiDou-3**: IGSO & GEO satellites for Asia-Pacific coverage")
+    with st.sidebar.expander("🔄 G1/G4 Slot Swap Notice", expanded=False):
+        st.markdown(BEIDOU3_SLOT_SWAP_NOTE)
+        st.caption("See the Health Overview tab for full details.")
 
 st.sidebar.markdown("---")
 
@@ -442,7 +446,6 @@ with col2:
 
 start_date_str = start_date.strftime("%Y-%m-%d")
 end_date_str = end_date.strftime("%Y-%m-%d")
-daily_only = st.sidebar.checkbox("One TLE per day", value=True, help="Keep only first TLE entry per day to reduce data volume")
 use_historical_pattern = True  # Always use historical pattern for maneuver detection
 
 st.sidebar.markdown("---")
@@ -486,19 +489,6 @@ if use_bundled_data:
     else:
         st.sidebar.warning("⚠️ No bundled TLEs available")
     
-    # Refresh button with appropriate warning
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("##### 🔄 Fetch Latest Data")
-    
-    # Show warning based on data age
-    if gp_meta['available'] and data_age_days is not None and data_age_days < 7:
-        st.sidebar.caption("⚠️ **Note:** Bundled data is less than a week old. Only refresh if you need the very latest data.")
-    
-    if st.sidebar.button("📡 Fetch Live Data from APIs", 
-                         help="Fetch latest data from Space-Track/CelesTrak APIs. Use only if bundled data is outdated."):
-        st.session_state['force_api_refresh'] = True
-        st.session_state['use_bundled_data'] = False
-        st.rerun()
 else:
     st.sidebar.info("📡 Will fetch live data from APIs")
 
@@ -684,17 +674,6 @@ if run_analysis:
                             f"Bundled data covers {bundled_start.strftime('%Y-%m-%d')} to {bundled_end.strftime('%Y-%m-%d')}. "
                             f"Try adjusting the date range or use live API fetch.")
                 else:
-                    # Apply daily_only filter if selected
-                    if daily_only:
-                        df_list = []
-                        for sat in df_all['satellite'].unique():
-                            sat_df = df_all[df_all['satellite'] == sat].copy()
-                            sat_df['date'] = sat_df['EPOCH'].dt.date
-                            sat_df = sat_df.sort_values('EPOCH').groupby('date', as_index=False).first()
-                            sat_df['EPOCH'] = pd.to_datetime(sat_df['EPOCH'])
-                            df_list.append(sat_df)
-                        df_all = pd.concat(df_list, ignore_index=True)
-                
                     # Identify and remove graveyard satellites from analysis
                     graveyard_sats = get_graveyard_satellites(df_all)
                     if graveyard_sats:
@@ -755,11 +734,6 @@ if run_analysis:
 
                             df['EPOCH'] = pd.to_datetime(df['EPOCH'])
                             df = df.sort_values('EPOCH').reset_index(drop=True)
-
-                            if daily_only:
-                                df['date'] = df['EPOCH'].dt.date
-                                df = df.sort_values('EPOCH').groupby('date', as_index=False).first()
-                                df['EPOCH'] = pd.to_datetime(df['EPOCH'])
 
                             df['satellite'] = sat_name
 
@@ -846,6 +820,16 @@ if st.session_state.get('analysis_complete', False):
         st.info(f"📦 **Data Source**: Bundled cache from {format_timestamp_for_display(data_timestamp)}")
     elif data_source == 'api':
         st.info(f"📡 **Data Source**: Live API fetch from {format_timestamp_for_display(data_timestamp)}")
+    
+    # BeiDou-3 G1/G4 slot swap notification
+    if constellation == "BeiDou-3":
+        from config.config import BEIDOU3_SLOT_SWAP_NOTE
+        with st.expander("🔄 G1/G4 Slot Swap Detected — Click for details", expanded=True):
+            st.warning(BEIDOU3_SLOT_SWAP_NOTE)
+            st.markdown(
+                "The dashboard has been updated to reflect the new designations. "
+                "G1's designated slot is now **160°E** and G4's is **140°E**."
+            )
     
     st.markdown("---")
     
