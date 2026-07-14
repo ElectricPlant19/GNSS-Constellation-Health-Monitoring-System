@@ -1844,7 +1844,7 @@ if st.session_state.get('analysis_complete', False):
                                 })
                     
                     dop_df = pd.DataFrame(dop_results)
-                    st.dataframe(dop_df, hide_index=True, width='stretch')
+                    st.dataframe(dop_df, hide_index=True, use_container_width=True)
                     
                     # DOP Quality Guide with reference
                     with st.expander("ℹ️ DOP Quality Reference", expanded=False):
@@ -2126,7 +2126,7 @@ if st.session_state.get('analysis_complete', False):
                         st.dataframe(
                             pd.DataFrame(sat_rows),
                             hide_index=True,
-                            width='stretch',
+                            use_container_width=True,
                         )
 
                         with st.expander("🛰️ 3D orbit geometry", expanded=False):
