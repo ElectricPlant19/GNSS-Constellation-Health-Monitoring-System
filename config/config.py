@@ -172,7 +172,7 @@ QZSS_MAINTENANCE_NOTE = "Orbit correction maneuvers occur roughly once every six
 #     # GEO satellites
 #     "BeiDou-3 G1": {
 #         "type": "GEO",
-#         "central_longitude_deg": 144.2, "longitude_tol_deg": 0.5,
+#         "central_longitude_deg": 140.0, "longitude_tol_deg": 0.5,
 #         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
 #         "sma_km": 42164.0, "sma_tol_km": 10.0,
 #         "ecc_max": 0.05
@@ -197,7 +197,7 @@ QZSS_MAINTENANCE_NOTE = "Orbit correction maneuvers occur roughly once every six
 #         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
 #         "sma_km": 42164.0, "sma_tol_km": 10.0,
 #         "ecc_max": 0.05
-#     }
+#     }  # G4 launched to 160°E (backup); swapped to 140°E Apr 2026
 # }
 
 
@@ -247,7 +247,11 @@ BEIDOU3_SERVICE_REQUIREMENTS = {
     },
     "BeiDou-3 G1": {
         "type": "GEO",
-        "central_longitude_deg": 140.0,
+        # G1 (PRN 4) was originally stationed at 140°E. As part of a
+        # coordinated slot swap with G4 (announced Apr 2026 by CSNO),
+        # G1 now occupies the 160°E position — the constellation's
+        # designated spare slot.
+        "central_longitude_deg": 160.0,
         "longitude_tol_deg": 0.5,
         "inclination_target_deg": 0.0,
         "inclination_target_deg_range": (-3.0, 3.0),
@@ -279,8 +283,11 @@ BEIDOU3_SERVICE_REQUIREMENTS = {
         "ecc_max": 0.05
     },
     "BeiDou-3 G4": {
+        # G4 was launched to 160°E as BeiDou-3's first backup (May 2023).
+        # Per CSNO's Apr 2026 re-designation, G4 now occupies 140°E and
+        # carries PRN 1, while 160°E is the constellation's spare slot.
         "type": "GEO",
-        "central_longitude_deg": 160.0,
+        "central_longitude_deg": 140.0,
         "longitude_tol_deg": 0.5,
         "inclination_target_deg": 0.0,
         "inclination_target_deg_range": (-3.0, 3.0),
@@ -288,11 +295,26 @@ BEIDOU3_SERVICE_REQUIREMENTS = {
         "sma_km": 42164.0,
         "sma_tol_km": 10.0,
         "ecc_max": 0.05
-    }
+    },
 }
 
 # BeiDou-3 maintenance note
 BEIDOU3_MAINTENANCE_NOTE = "BeiDou-3 IGSO and GEO satellites provide regional coverage over Asia-Pacific."
+
+# BeiDou-3 GEO slot swap notification
+# CSNO announced (Apr 2026) that G4 (PRN 1) now occupies 140°E and
+# G1 (PRN 4) occupies 160°E. The 160°E position is the spare slot.
+BEIDOU3_SLOT_SWAP_NOTE = (
+    "**BeiDou-3 GEO Slot Swap**\n\n"
+    "G1 and G4 have exchanged positions per the China Satellite Navigation "
+    "Office's (CSNO) April 2026 re-designation:\n\n"
+    "• **G4** (PRN 1) now occupies **140°E** (prime slot)\n"
+    "• **G1** (PRN 4) now occupies **160°E** (constellation spare slot)\n\n"
+    "This was a coordinated swap — G4 departed 160°E first, maintaining "
+    "continuous occupancy at 140°E, followed by G1's repositioning to "
+    "160°E. The dashboard's longitude deviation scores reflect these "
+    "new designations."
+)
 
 # Commissioning / active dates for satellites (use for analysis windows)
 # Dates should be YYYY-MM-DD. Add entries for recently commissioned satellites.
