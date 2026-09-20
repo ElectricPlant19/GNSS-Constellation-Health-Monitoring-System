@@ -1,8 +1,8 @@
 {
   "constellation": "beidou3",
-  "timestamp": "2026-09-13T03:10:52.378795+00:00",
-  "start_date": "2025-09-13",
-  "end_date": "2026-09-13",
+  "timestamp": "2026-09-20T03:26:05.071100+00:00",
+  "start_date": "2025-09-20",
+  "end_date": "2026-09-20",
   "satellites": {
     "BeiDou-3 G1": [],
     "BeiDou-3 G2": [],
