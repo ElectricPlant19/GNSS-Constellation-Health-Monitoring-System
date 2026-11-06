@@ -19,7 +19,7 @@ from api.spacetrack_api import fetch_and_classify_satellite, fetch_multiple_tles
 from api.celestrak_api import fetch_tles_from_celestrak, fetch_tles_with_fallback
 from analysis.drift_analysis import assess_drift_health, get_drift_direction
 from analysis.maneuver_detection import detect_navik_maneuvers
-from analysis.health_assessment import assess_satellite_health_with_drift
+from analysis.health_assessment import assess_satellite_health_with_drift, longitude_deviation_score
 from analysis.dop_calculations import parse_tle_data, calculate_dop_for_location, get_dop_quality
 from analysis.raan_analysis import analyze_raan_spacing
 from data.tle_cache import (
@@ -401,10 +401,10 @@ constellation = st.sidebar.selectbox(
 # Per-constellation configuration and info
 if constellation == "NavIC":
     SAT_DICT = NAVIK_SATS
-    SERVICE_REQS = None
+    SERVICE_REQS = NAVIK_SERVICE_REQUIREMENTS
     system_label = "NavIC"
     LOCATION_POINTS = INDIA_EXTREME_POINTS
-    st.sidebar.info("🇮🇳 **NavIC (IRNSS)**: 7 satellites providing regional navigation coverage for India")
+    st.sidebar.info(f"🇮🇳 **NavIC (IRNSS)**: {len(SAT_DICT)} tracked satellites, including NVS-03 at 111.75°E")
     include_inactive_sats = st.sidebar.checkbox(
         "Include inactive satellites in DOP", value=False,
         help="IRNSS-1C, 1D, 1E are currently inactive"
@@ -415,7 +415,7 @@ elif constellation == "QZSS":
     system_label = "QZSS"
     LOCATION_POINTS = JAPAN_KEY_POINTS
     include_inactive_sats = False
-    st.sidebar.info("🇯🇵 **QZSS (Michibiki)**: 5 satellites with orbit corrections ~every 6 months")
+    st.sidebar.info(f"🇯🇵 **QZSS (Michibiki)**: {len(SAT_DICT)} tracked satellites, including QZS-7 (QGEO) at 184.5°E / 175.5°W")
 else:  # BeiDou-3
     from config.config import BEIDOU3_SLOT_SWAP_NOTE
     SAT_DICT = BEIDOU3_SATS
@@ -429,6 +429,15 @@ else:  # BeiDou-3
         st.caption("See the Health Overview tab for full details.")
 
 st.sidebar.markdown("---")
+
+with st.sidebar.expander("🛰️ Tracked satellites"):
+    st.dataframe(pd.DataFrame([
+        {'Satellite': name, 'NORAD ID': norad,
+         'Nominal slot (°E)': req.get('longitude', req.get('central_longitude_deg', 0)) % 360}
+        for name, norad in SAT_DICT.items()
+        for req in [SERVICE_REQS.get(name, {})]
+    ]), hide_index=True, use_container_width=True)
+    st.caption("Tracked objects include inactive satellites and satellites undergoing commissioning.")
 
 # Date Range - Always visible
 st.sidebar.markdown("#### 📅 Analysis Period")
@@ -485,9 +494,9 @@ if use_bundled_data:
         data_age_days = None
     
     if tle_meta['available']:
-        st.sidebar.success(f"📡 TLEs: {format_timestamp_for_display(tle_meta['timestamp'])}")
+        st.sidebar.success(f"📡 Orbital elements: {format_timestamp_for_display(tle_meta['timestamp'])}")
     else:
-        st.sidebar.warning("⚠️ No bundled TLEs available")
+        st.sidebar.warning("⚠️ No bundled orbital elements available")
     
 else:
     st.sidebar.info("📡 Will fetch live data from APIs")
@@ -638,6 +647,7 @@ with col2:
 if run_analysis:
     # Check if bundled data mode is enabled
     constellation_key = constellation.lower().replace('-', '')
+    st.session_state.pop(f'satellites_dop_{constellation_key}', None)
     
     if use_bundled_data:
         # Try to load from bundled data first
@@ -805,9 +815,9 @@ if st.session_state.get('analysis_complete', False):
     date_range_days = (df_all['EPOCH'].max() - df_all['EPOCH'].min()).days
     
     with col1:
-        st.metric("Constellation", system_label, f"{active_sats} active")
+        st.metric("Constellation", system_label, f"{total_sats} with history")
     with col2:
-        st.metric("Total Satellites", total_sats, f"{len(graveyard_sats)} inactive" if graveyard_sats else "All active")
+        st.metric("Tracked Satellites", len(SAT_DICT), f"{len(graveyard_sats)} excluded in graveyard orbit" if graveyard_sats else f"{total_sats} with history")
     with col3:
         st.metric("Analysis Period", f"{date_range_days} days", f"{start_date_str} to {end_date_str}")
     with col4:
@@ -839,6 +849,14 @@ if st.session_state.get('analysis_complete', False):
     # ==================== TAB 1: HEALTH OVERVIEW ====================
     with tab1:
         st.markdown(f"## Satellite Health Assessment")
+
+        missing_history = sorted(set(SAT_DICT) - set(df_all['satellite']) - graveyard_sats)
+        if missing_history:
+            st.info(
+                "Historical health data unavailable for this period: " + ', '.join(missing_history)
+                + ". These satellites remain configured for position tracking. "
+                "Refresh GP history using Space-Track to include them in health and maneuver analysis."
+            )
         
         # Check if health assessment is already cached to avoid rerunning on every interaction
         health_cache_key = f"health_df_{start_date_str}_{end_date_str}_{constellation}"
@@ -1055,8 +1073,8 @@ if st.session_state.get('analysis_complete', False):
             st.session_state[all_maneuvers_cache_key] = all_maneuvers_df
             st.session_state['health_cache_valid'] = True
         
-        # Calculate longitude deviations - use bundled TLEs if available, otherwise fetch
-        st.info("📍 Calculating longitude deviations from TLE data...")
+        # Calculate longitude deviations - use bundled orbital elements if available, otherwise fetch
+        st.info("📍 Calculating longitude deviations from orbital elements...")
         lon_progress = st.progress(0, text="Initializing longitude deviation calculation...")
         try:
             from skyfield.api import wgs84
@@ -1065,9 +1083,9 @@ if st.session_state.get('analysis_complete', False):
             from api.celestrak_api import fetch_tles_with_fallback
             from analysis.dop_calculations import parse_tle_data
             
-            lon_progress.progress(0.1, text="Loading TLE data for longitude calculation...")
+            lon_progress.progress(0.1, text="Loading orbital data for longitude calculation...")
 
-            # Fetch TLE data for longitude calculation
+            # Fetch orbital data for longitude calculation
             norad_ids = [nid for nid in SAT_DICT.values() if nid is not None]
 
             # Use constellation-specific key to avoid cross-constellation cache pollution
@@ -1078,14 +1096,14 @@ if st.session_state.get('analysis_complete', False):
             if sat_dop_key in st.session_state and st.session_state[sat_dop_key]:
                 satellites_dop = st.session_state[sat_dop_key]
             else:
-                # Try bundled TLEs first
-                bundled_tles = load_bundled_tles(constellation_key)
+                # Try bundled orbital elements first
+                bundled_tles = load_bundled_tles(constellation_key) if use_bundled_data else {}
 
                 if bundled_tles and bundled_tles.get('tle_data'):
                     tle_data = bundled_tles['tle_data']
                     satellites_dop = parse_tle_data(tle_data, SAT_DICT)
                     st.session_state[sat_dop_key] = satellites_dop
-                    st.caption(f"📦 Using bundled TLEs from {format_timestamp_for_display(bundled_tles.get('timestamp', ''))}")
+                    st.caption(f"📦 Using bundled orbital elements from {format_timestamp_for_display(bundled_tles.get('timestamp', ''))}")
                 else:
                     # Fall back to API
                     tle_data, tle_source = fetch_tles_with_fallback(norad_ids, username, password, timeout=10)
@@ -1167,23 +1185,9 @@ if st.session_state.get('analysis_complete', False):
                             abs_dev = abs(longitude_deviation)
                             sat_type = row['Type']
                             
-                            if sat_type == 'GEO':
-                                if abs_dev <= 0.5:
-                                    lon_score = 100
-                                elif abs_dev <= 1.0:
-                                    lon_score = 90 - ((abs_dev - 0.5) / 0.5) * 20
-                                elif abs_dev <= 2.0:
-                                    lon_score = 70 - ((abs_dev - 1.0) / 1.0) * 30
-                                else:
-                                    lon_score = max(0, 40 - ((abs_dev - 2.0) / 2.0) * 40)
-                            else:  # IGSO
-                                if abs_dev <= 5.0:
-                                    lon_score = 100
-                                elif abs_dev <= 10.0:
-                                    lon_score = 90 - ((abs_dev - 5.0) / 5.0) * 30
-                                else:
-                                    lon_score = max(0, 60 - ((abs_dev - 10.0) / 10.0) * 60)
-                            
+                            requirements = SERVICE_REQS.get(sat_name, {})
+                            lon_score = longitude_deviation_score(longitude_deviation, sat_type, requirements)
+
                             health_df.at[idx, 'Lon Deviation Score'] = round(lon_score, 1)
 
                             # Recalculate Overall Score to include the longitude component.
@@ -1230,7 +1234,11 @@ if st.session_state.get('analysis_complete', False):
                             # Append longitude remarks
                             current_remarks = health_df.at[idx, 'Remarks']
                             new_remark = ""
-                            if sat_type == 'GEO':
+                            if sat_type == 'QGEO':
+                                low, high = requirements['longitude_range_deg']
+                                state = 'Within' if lon_score == 100 else 'Outside'
+                                new_remark = f"{state} QGEO longitude-centre range ({low}–{high}°E; deviation {longitude_deviation:+.2f}°)"
+                            elif sat_type == 'GEO':
                                 if abs_dev <= 0.5:
                                     new_remark = f"✅ Excellent longitude slot position ({longitude_deviation:+.2f}° from {designated_lon}°)"
                                 elif abs_dev <= 1.0:
@@ -1258,6 +1266,22 @@ if st.session_state.get('analysis_complete', False):
             st.warning(f"Could not calculate longitude deviations: {e}")
         
         
+        if missing_history:
+            position_satellites = st.session_state.get(f'satellites_dop_{constellation_key}', {})
+            snapshots = []
+            for name in missing_history:
+                sat = position_satellites.get(name)
+                req = SERVICE_REQS.get(name, {})
+                snapshots.append({
+                    'Satellite': name, 'NORAD ID': SAT_DICT[name],
+                    'Orbit': req.get('type', 'Configured'),
+                    'Nominal slot (°E)': req.get('longitude', req.get('central_longitude_deg', 0)) % 360,
+                    'Element epoch (UTC)': sat.epoch.utc_iso() if sat else 'Unavailable',
+                    'Health status': 'Awaiting historical data',
+                })
+            st.markdown("### Satellites awaiting historical data")
+            st.dataframe(pd.DataFrame(snapshots), hide_index=True, use_container_width=True)
+
         # Health summary metrics
         st.markdown("### 📊 Overall Health Summary")
         col1, col2, col3, col4 = st.columns(4)
@@ -1512,7 +1536,9 @@ if st.session_state.get('analysis_complete', False):
                     
                     # Determine satellite type
                     mean_incl = sat_df['INCLINATION'].mean()
-                    if 0.0 < mean_incl < 10.0:
+                    if SERVICE_REQS.get(sat_name, {}).get('type') == 'QGEO':
+                        sat_type = 'QGEO'
+                    elif 0.0 < mean_incl < 10.0:
                         sat_type = 'GEO'
                     else:
                         sat_type = 'IGSO'
@@ -1644,7 +1670,9 @@ if st.session_state.get('analysis_complete', False):
                 mean_alt = sub['altitude_km'].mean() if not sub.empty and 'altitude_km' in sub.columns else float('nan')
                 current_drift = sub['LonDrift_deg_per_day'].iloc[-1] if 'LonDrift_deg_per_day' in sub.columns and len(sub) > 0 else float('nan')  # Use instantaneous drift
                 
-                if 0.0 < mean_incl < 10.0:
+                if SERVICE_REQS.get(sat_name, {}).get('type') == 'QGEO':
+                    sat_type = 'QGEO'
+                elif 0.0 < mean_incl < 10.0:
                     sat_type = 'GEO'
                 elif mean_incl >= 10.0:
                     if "QZSS" in system_label:
@@ -1675,7 +1703,7 @@ if st.session_state.get('analysis_complete', False):
             constellation_key = constellation.lower().replace('-', '')
             sat_dop_key = f"satellites_dop_{constellation_key}"
 
-            # Try bundled TLEs first if in offline mode
+            # Try bundled orbital elements first if in offline mode
             if use_bundled_data:
                 bundled_tles = load_bundled_tles(constellation_key)
                 
@@ -1683,9 +1711,9 @@ if st.session_state.get('analysis_complete', False):
                     tle_data = bundled_tles['tle_data']
                     tle_source = "bundled"
                     bundled_timestamp = bundled_tles.get('timestamp', 'Unknown')
-                    st.info(f"📦 Using bundled TLE data from {format_timestamp_for_display(bundled_timestamp)}")
+                    st.info(f"📦 Using bundled orbital data from {format_timestamp_for_display(bundled_timestamp)}")
                 else:
-                    st.warning("⚠️ No bundled TLEs available. Attempting to fetch from APIs...")
+                    st.warning("⚠️ No bundled orbital elements available. Attempting to fetch from APIs...")
             
             # Fall back to API if bundled not available or not in offline mode
             if not tle_data:
@@ -2039,12 +2067,12 @@ if st.session_state.get('analysis_complete', False):
 
             # If DOP tab hasn't populated session state yet, load TLEs independently
             if not satellites_for_raan:
-                bundled_tles = load_bundled_tles(raan_constellation_key)
+                bundled_tles = load_bundled_tles(raan_constellation_key) if use_bundled_data else {}
                 tle_data = None
                 if bundled_tles and bundled_tles.get('tle_data'):
                     tle_data = bundled_tles['tle_data']
                     st.caption(
-                        f"📦 Using bundled TLEs from "
+                        f"📦 Using bundled orbital elements from "
                         f"{format_timestamp_for_display(bundled_tles.get('timestamp', ''))}"
                     )
                 elif not use_bundled_data:
@@ -2059,7 +2087,7 @@ if st.session_state.get('analysis_complete', False):
             if not satellites_for_raan:
                 st.warning(
                     "⚠️ No TLE data available for RAAN analysis. "
-                    "Open the DOP Analysis tab first, or ensure bundled TLEs are present."
+                    "Open the DOP Analysis tab first, or ensure bundled orbital elements are present."
                 )
             else:
                 groups = analyze_raan_spacing(satellites_for_raan, raan_reqs)
@@ -2163,9 +2191,9 @@ else:
     
     with col1:
         st.markdown("### 🛰️ Supported Systems")
-        st.markdown("""
-        - **NavIC (IRNSS)**: 7 satellites, India coverage
-        - **QZSS (Michibiki)**: 5 satellites, Japan coverage  
+        st.markdown(f"""
+        - **NavIC (IRNSS)**: {len(NAVIK_SATS)} tracked satellites, including NVS-03
+        - **QZSS (Michibiki)**: {len(QZSS_SATS)} tracked satellites, including QZS-7
         - **BeiDou-3**: IGSO & GEO, Asia-Pacific coverage
         """)
     

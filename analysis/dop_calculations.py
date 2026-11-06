@@ -15,12 +15,23 @@ from datetime import datetime, timedelta
 from datetime import timezone
 from skyfield.api import load, EarthSatellite, wgs84
 from config.config import NAVIK_SATS
+from api.orbital_data import latest_gp_records, satellite_from_record
 
 
 def parse_tle_data(tle_text, sat_dict):
-    """Parse TLE text and create satellite objects"""
+    """Parse GP JSON or legacy bundled TLE text and create satellite objects."""
     ts = load.timescale()
     satellites = {}
+
+    names = {int(n): name for name, n in sat_dict.items() if n is not None}
+    if not isinstance(tle_text, str) or tle_text.lstrip().startswith(('[', '{')):
+        for record in latest_gp_records(tle_text, names):
+            name = names[int(record['NORAD_CAT_ID'])]
+            try:
+                satellites[name] = satellite_from_record(record, name, ts)
+            except (ValueError, KeyError, TypeError):
+                continue
+        return satellites
     
     lines = tle_text.strip().split('\n')
     
@@ -33,7 +44,8 @@ def parse_tle_data(tle_text, sat_dict):
         line2 = lines[i + 2].strip()
         
         try:
-            norad_id = int(line1[2:7])
+            from sgp4.alpha5 import from_alpha5
+            norad_id = from_alpha5(line1[2:7])
             sat_name = None
             for s_name, s_id in sat_dict.items():
                 if s_id == norad_id:

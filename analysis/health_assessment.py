@@ -11,6 +11,33 @@ from analysis.drift_analysis import assess_drift_health, calculate_drift_trend
 from analysis.maneuver_detection import calculate_maneuver_uniformity
 
 
+def longitude_deviation_score(deviation, sat_type, requirements=None):
+    """Score circular slot deviation, respecting QGEO's permitted centre range."""
+    abs_dev = abs((float(deviation) + 180.0) % 360.0 - 180.0)
+    if sat_type == 'QGEO':
+        req = requirements or QZSS_SERVICE_REQUIREMENTS['QZS-7 (Michibiki-7)']
+        low, high = req['longitude_range_deg']
+        centre = req['central_longitude_deg']
+        signed_dev = (float(deviation) + 180.0) % 360.0 - 180.0
+        low_dev = (low - centre + 180.0) % 360.0 - 180.0
+        high_dev = (high - centre + 180.0) % 360.0 - 180.0
+        excess = max(0.0, low_dev - signed_dev, signed_dev - high_dev)
+        return max(0.0, 100.0 * (1.0 - excess / ((high_dev - low_dev) / 2.0)))
+    if sat_type == 'GEO':
+        if abs_dev <= 0.5:
+            return 100.0
+        if abs_dev <= 1.0:
+            return 90 - ((abs_dev - 0.5) / 0.5) * 20
+        if abs_dev <= 2.0:
+            return 70 - (abs_dev - 1.0) * 30
+        return max(0, 40 - ((abs_dev - 2.0) / 2.0) * 40)
+    if abs_dev <= 5.0:
+        return 100.0
+    if abs_dev <= 10.0:
+        return 90 - ((abs_dev - 5.0) / 5.0) * 30
+    return max(0, 60 - ((abs_dev - 10.0) / 10.0) * 60)
+
+
 def analyze_maneuver_pattern(maneuver_events, observation_start, observation_end):
     """
     Dynamically analyze the maneuver pattern for a satellite.
@@ -291,7 +318,8 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
         target_inclination = requirements["inclination"]
     elif "inclination_target_deg_range" in requirements:
         inc_range_bounds = requirements["inclination_target_deg_range"]
-        target_inclination = (inc_range_bounds[0] + inc_range_bounds[1]) / 2.0
+        target_inclination = requirements.get(
+            'inclination_target_deg', (inc_range_bounds[0] + inc_range_bounds[1]) / 2.0)
     elif "inclination_target_deg" in requirements:
         target_inclination = requirements["inclination_target_deg"]
 
@@ -300,7 +328,9 @@ def assess_satellite_health_with_drift(sat_name, sat_df, maneuver_events, inc_to
     std_inclination = sat_df['INCLINATION'].std()
 
     # Determine satellite type
-    if 0.0 <= current_inclination < 10.0:
+    if requirements.get('type') == 'QGEO':
+        sat_type = 'QGEO'
+    elif 0.0 <= current_inclination < 10.0:
         sat_type = 'GEO'
     elif current_inclination >= 10.0:
         # QZO is reserved for QZSS; NavIC and BeiDou IGSO satellites stay labeled IGSO.

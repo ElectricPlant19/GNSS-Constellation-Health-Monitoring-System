@@ -23,7 +23,8 @@ NAVIK_SATS = {
     "IRNSS-1F": 41384,
     "IRNSS-1G": 41469,
     "IRNSS-1I": 43286,
-    "NVS-01": 56759
+    "NVS-01": 56759,
+    "NVS-03": 101228,  # IRNSS-1L, 2026-245A
 }
 
 # India's extreme geographical points for DOP analysis
@@ -69,7 +70,9 @@ NAVIK_SERVICE_REQUIREMENTS = {
     "IRNSS-1F": {"longitude": 32.5, "inclination": 5.0},       # GEO
     "IRNSS-1G": {"longitude": 129.5, "inclination": 5.1},      # GEO (messaging-only; navigation services via NVS-1)
     "IRNSS-1I": {"longitude": 55.0, "inclination": 29.0},      # GEO
-    "NVS-01": {"longitude": 131.5, "inclination": 5.0}         # GEO
+    "NVS-01": {"longitude": 131.5, "inclination": 5.0},        # GEO
+    # ISRO: https://www.isro.gov.in/Orbit_manoeuvring_of_NVS03_spacecraft.html
+    "NVS-03": {"type": "IGSO", "longitude": 111.75, "inclination": 30.0}
 }
 
 # QZSS Satellite NORAD IDs (fill correct NORAD_CAT_ID values)
@@ -78,7 +81,8 @@ QZSS_SATS = {
     "QZS-2 (Michibiki-2)": 42738,    
     "QZS-3 (Michibiki-3)": 42917,     
     "QZS-4 (Michibiki-4)": 42965,   
-    "QZS-6 (Michibiki-6)": 62876      
+    "QZS-6 (Michibiki-6)": 62876,
+    "QZS-7 (Michibiki-7)": 100270,  # 2026-182A
 }
 
 # QZSS service/target requirements (per provided specifications)
@@ -123,6 +127,18 @@ QZSS_SERVICE_REQUIREMENTS = {
         "inclination_target_deg": 0.0, "inclination_tol_deg": 0.5,
         "sma_km": 42164.0, "sma_tol_km": 10.0,
         "ecc_max": 0.099
+    },
+    # PS-QZSS-005, Table 3.2-3; QGEO longitude centre 177.5–190.5°E.
+    # https://qzss.go.jp/en/technical/download/pdf/ps-is-qzss/ps-qzss-005.pdf
+    "QZS-7 (Michibiki-7)": {
+        "type": "QGEO",
+        "central_longitude_deg": -175.5,
+        "longitude_range_deg": (177.5, 190.5),
+        "inclination_target_deg": 5.0,
+        "inclination_target_deg_range": (1.0, 8.0),
+        "sma_km": 42165.0,
+        "ecc_min": 0.007, "ecc_max": 0.009,
+        "arg_perigee_deg": 0.0
     }
 }
 

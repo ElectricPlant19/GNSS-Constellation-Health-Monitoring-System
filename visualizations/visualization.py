@@ -1405,12 +1405,14 @@ def plot_historical_central_longitude(df_all, system_label="NavIC"):
     else:
         service_reqs = {}
     
-    # Check if we have TLE data
+    from api.orbital_data import ORBIT_FIELDS, satellite_from_record
+
+    # New catalog objects have GP/OMM elements without legacy TLE lines.
     has_tle_lines = 'TLE_LINE1' in df_all.columns and 'TLE_LINE2' in df_all.columns
+    has_gp_elements = all(field in df_all.columns for field in (*ORBIT_FIELDS, 'NORAD_CAT_ID'))
     
-    if not has_tle_lines:
-        st.warning("⚠️ Historical TLE lines not available. Please re-run the analysis to fetch updated data with TLE information.")
-        st.info("💡 Tip: Clear browser cache and re-fetch data to get historical TLE lines.")
+    if not has_tle_lines and not has_gp_elements:
+        st.warning("⚠️ Historical orbital elements unavailable. Refresh GP history to calculate central longitude.")
         return
     
     with st.spinner("Calculating historical central longitudes... This may take a moment."):
@@ -1420,7 +1422,6 @@ def plot_historical_central_longitude(df_all, system_label="NavIC"):
         # Process each satellite
         for sat_name in sorted(df_all['satellite'].unique()):
             sat_df = df_all[df_all['satellite'] == sat_name].copy()
-            sat_df = sat_df.dropna(subset=['TLE_LINE1', 'TLE_LINE2'])
             
             if len(sat_df) == 0:
                 continue
@@ -1433,12 +1434,7 @@ def plot_historical_central_longitude(df_all, system_label="NavIC"):
             
             for _, row in weekly_tles.iterrows():
                 try:
-                    # Reconstruct satellite from TLE
-                    tle_line1 = row['TLE_LINE1']
-                    tle_line2 = row['TLE_LINE2']
-                    obj_name = row.get('OBJECT_NAME', sat_name)
-                    
-                    satellite = EarthSatellite(tle_line1, tle_line2, obj_name, ts)
+                    satellite = satellite_from_record(row.to_dict(), sat_name, ts)
                     
                     # Get epoch from TLE
                     epoch = row['EPOCH']
@@ -2137,7 +2133,12 @@ def plot_mean_longitude_map(satellites, reference_time, timestep_minutes=15, sys
                 abs_dev = abs(dev_val)
                 
                 # Color based on deviation magnitude
-                if abs_dev > 1.0:
+                req = service_reqs.get(row['Satellite'], {})
+                if req.get('type') == 'QGEO':
+                    from analysis.health_assessment import longitude_deviation_score
+                    in_range = longitude_deviation_score(dev_val, 'QGEO', req) == 100
+                    color = 'background-color: #ccffcc' if in_range else 'background-color: #ffcccc'
+                elif abs_dev > 1.0:
                     color = 'background-color: #ffcccc'  # Light red
                 elif abs_dev > 0.5:
                     color = 'background-color: #ffffcc'  # Light yellow
@@ -2160,6 +2161,7 @@ def plot_mean_longitude_map(satellites, reference_time, timestep_minutes=15, sys
         - 🟢 Green: Deviation ≤ 0.5° (Good)
         - 🟡 Yellow: Deviation 0.5° - 1.0° (Acceptable)
         - 🔴 Red: Deviation > 1.0° (Needs Attention)
+        - QGEO: Green when the longitude centre is within its configured operational range.
 
         *Solid lines show current mean longitude. Light dashed lines show designated longitude slots.*
         """)

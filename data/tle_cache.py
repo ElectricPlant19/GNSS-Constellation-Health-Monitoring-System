@@ -4,6 +4,7 @@ Provides offline-first data loading with optional API refresh support.
 """
 
 import json
+from api.orbital_data import latest_gp_records
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,7 +36,8 @@ def load_bundled_tles(constellation: str) -> dict:
         constellation: 'navic', 'qzss', or 'beidou3'
     
     Returns:
-        dict with keys: 'tle_data' (raw TLE string), 'timestamp', 'satellites'
+        dict with keys: 'tle_data' (GP JSON string or legacy TLE text),
+        'timestamp', 'satellites'. The legacy key is retained for compatibility.
         Returns empty dict if file not found
     """
     filepath = get_data_file_path(constellation, "tles")
@@ -140,7 +142,7 @@ def save_tles_to_bundle(constellation: str, tle_text: str, satellites: dict) -> 
     
     Args:
         constellation: 'navic', 'qzss', or 'beidou3'
-        tle_text: Raw TLE string (3-line format)
+        tle_text: GP JSON string or legacy TLE text (3-line format)
         satellites: Dict mapping sat_name -> norad_id
     
     Returns:
@@ -149,10 +151,20 @@ def save_tles_to_bundle(constellation: str, tle_text: str, satellites: dict) -> 
     filepath = get_data_file_path(constellation, "tles")
     
     try:
+        data_format = 'TLE'
+        if tle_text.lstrip().startswith(('[', '{')):
+            records = latest_gp_records(tle_text, satellites.values())
+            if not records:
+                return False
+            found = {int(r['NORAD_CAT_ID']) for r in records}
+            satellites = {name: nid for name, nid in satellites.items() if nid in found}
+            tle_text = json.dumps(records)
+            data_format = 'GP_JSON'
         data = {
             'constellation': constellation,
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'tle_data': tle_text,
+            'format': data_format,
             'satellites': satellites
         }
         

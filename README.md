@@ -338,13 +338,39 @@ Main Streamlit application providing:
 
 | Constellation | Satellites | Coverage | Status |
 |---------------|------------|----------|--------|
-| **NavIC (IRNSS)** | 7 (3 GEO, 4 IGSO) | India & surrounding | ✅ Fully configured |
-| **QZSS (Michibiki)** | 5 (3 IGSO, 2 GEO) | Japan & Asia-Pacific | ✅ Fully configured |
+| **NavIC (IRNSS)** | 9 tracked objects (including inactive satellites and NVS-03) | India & surrounding | ✅ Configured |
+| **QZSS (Michibiki)** | 6 (3 QZO, 2 GEO, 1 QGEO) | Japan & Asia-Pacific | ✅ Configured |
 | **BeiDou-3** | 7 (3 IGSO, 4 GEO) | Asia-Pacific | ✅ Fully configured |
 
 ### NavIC Orbital Slots
 - **GEO**: 32.5°E, 83°E, 131.5°E (inclination ~5°)
 - **GEO**: 55°E (2 sats), 111.75°E (2 sats) (inclination ~29-30°)
+
+### Recently added satellites
+
+| Satellite | NORAD ID | Orbit | Nominal longitude centre |
+|-----------|----------|-------|--------------------------|
+| NVS-03 (IRNSS-1L) | 101228 | IGSO, approximately 30° inclination | 111.75°E |
+| QZS-7 (Michibiki-7) | 100270 | QGEO, permitted inclination 1–8° | 184.5°E (stored as −175.5°) |
+
+NVS-03's target slot follows [ISRO's orbit manoeuvre notice](https://www.isro.gov.in/Orbit_manoeuvring_of_NVS03_spacecraft.html).
+QZS-7 follows [PS-QZSS-005, Table 3.2-3](https://qzss.go.jp/en/technical/download/pdf/ps-is-qzss/ps-qzss-005.pdf):
+longitude centre 177.5–190.5°E, nominal semi-major axis 42,165 km, and eccentricity 0.008 ± 0.001.
+These are monitoring targets, not a confirmation of navigation-service availability.
+
+Current position fetching now uses CelesTrak GP JSON and Space-Track GP JSON,
+supporting six-digit catalog IDs without conversion to legacy TLEs. The existing
+`*_tles.json` filenames and `tle_data` payload key remain compatible with old
+bundles; new bundles identify themselves with `format: GP_JSON`. Legacy TLE
+bundles remain readable. Missing objects in the GNSS group are queried by ID.
+
+Bundled positions include the two new satellites. Their historical health and
+maneuver plots require Space-Track GP history; the dashboard identifies missing
+history explicitly instead of synthesizing observations. Refresh with
+`python scripts/update_bundled_data.py --history-only --constellation all`
+using the existing Space-Track credential configuration. The scheduled updater
+also includes both satellites automatically. Use `--tles-only` to refresh current
+orbital elements without credentials.
 
 ### Analysis Parameters
 

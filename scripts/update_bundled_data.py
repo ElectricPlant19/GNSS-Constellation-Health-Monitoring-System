@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.config import NAVIK_SATS, QZSS_SATS, BEIDOU3_SATS
 from api.celestrak_api import fetch_tles_from_celestrak
+from api.orbital_data import latest_gp_records
 from data.tle_cache import save_tles_to_bundle, save_gp_history_to_bundle
 
 
@@ -119,7 +120,8 @@ def fetch_gp_history_for_satellite(norad_id: int, start_date: str, end_date: str
 
 def update_constellation_tles(constellation_name: str, sat_dict: dict, verbose: bool = True):
     """
-    Update bundled TLE data for a constellation using CelesTrak.
+    Update bundled GP JSON (OMM-compatible) for a constellation using CelesTrak.
+    Legacy function and file names are retained for existing deployments.
     
     Args:
         constellation_name: 'navic', 'qzss', or 'beidou3'
@@ -142,10 +144,15 @@ def update_constellation_tles(constellation_name: str, sat_dict: dict, verbose: 
         print(f"⚠️  Failed to fetch TLEs for {constellation_name}")
         return False
     
+    records = latest_gp_records(tle_data, norad_ids)
+    received_ids = {int(record['NORAD_CAT_ID']) for record in records}
+    missing = [name for name, nid in sat_dict.items() if nid not in received_ids]
+    if missing:
+        print(f"⚠️ No current orbital elements for: {', '.join(missing)}")
     success = save_tles_to_bundle(constellation_name, tle_data, sat_dict)
     
     if success and verbose:
-        print(f"✅ Saved TLEs for {constellation_name} ({len(norad_ids)} satellites)")
+        print(f"✅ Saved GP orbital elements for {constellation_name} ({len(received_ids)} satellites)")
     
     return success
 
