@@ -137,8 +137,10 @@ QZSS_SERVICE_REQUIREMENTS = {
         "inclination_target_deg": 5.0,
         "inclination_target_deg_range": (1.0, 8.0),
         "sma_km": 42165.0,
-        "ecc_min": 0.007, "ecc_max": 0.009,
-        "arg_perigee_deg": 0.0
+        "ecc_nominal": 0.008, "ecc_min": 0.007, "ecc_max": 0.009,
+        "arg_perigee_deg": 0.0,
+        # Reference at mid-service epoch; no instantaneous tolerance specified.
+        "raan_reference_deg": 50.0, "raan_reference_epoch": "2031-10"
     }
 }
 

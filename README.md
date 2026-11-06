@@ -358,6 +358,21 @@ QZS-7 follows [PS-QZSS-005, Table 3.2-3](https://qzss.go.jp/en/technical/downloa
 longitude centre 177.5–190.5°E, nominal semi-major axis 42,165 km, and eccentricity 0.008 ± 0.001.
 These are monitoring targets, not a confirmation of navigation-service availability.
 
+QZS-7 retains the existing weighted health model: inclination **30%**, maneuver
+maintenance **25%**, drift **20%**, longitude **15%**, and maneuver uniformity **10%**.
+The inclination reference is **5°**, with **1–8°** allowed before applying a deviation
+penalty; the existing inclination stability penalty remains. The longitude component
+uses **184.5°E** and gives full credit throughout **177.5–190.5°E**, with the existing
+gradual penalty outside that band. Maneuver pattern analysis, drift scoring, and
+health-status thresholds are unchanged. Available-component weights are normalized
+as before when a component is unavailable.
+
+The remaining table values are retained as references: semi-major axis **42,165 km**,
+eccentricity **0.008** (range **0.007–0.009**), argument of perigee **0°**, and RAAN
+**50°** at the **October 2031** reference epoch. They do not introduce new score
+components. The 5° inclination is a service-period average, while 184.5°E is a
+control-interval average.
+
 Current position fetching now uses CelesTrak GP JSON and Space-Track GP JSON,
 supporting six-digit catalog IDs without conversion to legacy TLEs. The existing
 `*_tles.json` filenames and `tle_data` payload key remain compatible with old

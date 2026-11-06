@@ -859,7 +859,7 @@ if st.session_state.get('analysis_complete', False):
             )
         
         # Check if health assessment is already cached to avoid rerunning on every interaction
-        health_cache_key = f"health_df_{start_date_str}_{end_date_str}_{constellation}"
+        health_cache_key = f"health_df_{start_date_str}_{end_date_str}_{constellation}_weighted_qgeo_v2"
         maneuver_cache_key = f"maneuver_summary_{start_date_str}_{end_date_str}_{constellation}"
         all_maneuvers_cache_key = f"all_maneuvers_df_{start_date_str}_{end_date_str}_{constellation}"
         
@@ -1373,6 +1373,30 @@ if st.session_state.get('analysis_complete', False):
             Each satellite's maneuver pattern is learned from historical data (last 365 days).
             The system detects expected intervals and flags overdue corrections automatically.
             """)
+            if constellation == 'QZSS':
+                req = SERVICE_REQS['QZS-7 (Michibiki-7)']
+                inc_low, inc_high = req['inclination_target_deg_range']
+                lon_low, lon_high = req['longitude_range_deg']
+                st.markdown(f"""
+                **QZS-7 (QGEO) uses the same five components and weights above.**
+                Its inclination reference is {req['inclination_target_deg']:g}° with an operational range of
+                {inc_low:g}–{inc_high:g}°. Inside this range, the inclination deviation penalty is zero;
+                the existing stability penalty still applies. Longitude receives full credit within
+                {lon_low:g}–{lon_high:g}°E, around a nominal centre of {req['central_longitude_deg'] % 360:g}°E,
+                and decreases gradually outside that range. Maneuver maintenance, uniformity, drift,
+                and health-status thresholds retain the existing calculations.
+                """)
+                st.dataframe(pd.DataFrame([
+                    {'Reference parameter': 'Semi-major axis', 'Nominal value': f"{req['sma_km']:,.0f} km", 'Operational range': 'Not specified'},
+                    {'Reference parameter': 'Eccentricity', 'Nominal value': f"{req['ecc_nominal']:g}", 'Operational range': f"{req['ecc_min']:g}–{req['ecc_max']:g}"},
+                    {'Reference parameter': 'Argument of perigee', 'Nominal value': f"{req['arg_perigee_deg']:g}°", 'Operational range': 'Not specified'},
+                    {'Reference parameter': 'RAAN', 'Nominal value': f"{req['raan_reference_deg']:g}° (October 2031 reference)", 'Operational range': 'Not specified'},
+                ]), hide_index=True, use_container_width=True)
+                st.caption(
+                    'These additional orbital parameters are reference values, not separate score components. '
+                    'The 5° inclination is a service-period average; 184.5°E is a control-interval average. '
+                    'The health score remains the dashboard monitoring model.'
+                )
         
         # Detailed remarks
         with st.expander("📋 Detailed Health Remarks & Pattern Analysis", expanded=False):
